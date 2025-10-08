@@ -1,4 +1,4 @@
-name: Firmware Monitoring CI
+name: Firmware Monitor CI
 
 on:
   push:
@@ -7,91 +7,71 @@ on:
   pull_request:
     branches:
       - main
-
-# Grant GITHUB_TOKEN permissions for contents and pages deployment
-permissions:
-  contents: write
-  pages: write
-  id-token: write
+  workflow_dispatch: # Allow manual triggering
 
 jobs:
   build_and_test:
     runs-on: ubuntu-latest
     
+    # CRITICAL: Define permissions for GitHub Pages deployment
+    permissions:
+      contents: read
+      pages: write 
+      id-token: write 
+
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
 
-    - name: Set up Docker Buildx
-      uses: docker/setup-buildx-action@v3
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.10'
+
+    - name: Run Analysis Script and generate reports
+      # CRITICAL FIX: Pass the GitHub Run Number to the script
+      run: python firmware_monitor.py --build-number ${{ github.run_number }}
       
-    - name: Build Local Analysis Image
-      # Builds a simple image based on python:3.10-slim for consistency, 
-      # copying only the necessary script (firmware_monitor.py).
+    - name: Prepare Report History Directory for Pages
+      # Move all generated files from the 'reports' directory into 'report_history'.
+      # This ensures deployment uses the correct sub-path structure.
       run: |
-        cat <<EOF > Dockerfile.ci
-        FROM python:3.10-slim
-        WORKDIR /app
-        COPY firmware_monitor.py .
-        CMD ["python", "firmware_monitor.py"]
-        EOF
-        docker build -t firmware-monitor-ci -f Dockerfile.ci .
+        mkdir -p report_history
+        mv reports/* report_history/
 
-    - name: Run Analysis Script & Generate Reports (via Docker Run)
-      # Executes the script inside the newly built container using 'docker run'.
-      # -v $(pwd)/reports:/app/reports mounts the host reports directory to the container's /app/reports.
-      # The script output is thus available on the host runner after the container exits.
-      run: |
-        mkdir -p reports # Ensure host reports directory exists
-        docker run \
-          --name analysis-run \
-          -v $(pwd)/reports:/app/reports \
-          firmware-monitor-ci \
-          python firmware_monitor.py ${{ github.run_number }}
-      
-    - name: Prepare Reports for Deployment
-      id: prepare_reports
-      run: |
-        # 1. Find the latest generated report (e.g., reports/firmware_analysis_report_2025...html)
-        REPORT_PATTERN="reports/firmware_analysis_report_*.html"
-        REPORT_FILE=$(ls -t $REPORT_PATTERN | head -n 1) # 'ls -t' finds newest file
+    - name: Setup Pages
+      # Configures the Pages environment
+      uses: actions/configure-pages@v5
 
-        if [ -z "$REPORT_FILE" ]; then
-          echo "Error: No report file found matching pattern $REPORT_PATTERN."
-          exit 1
-        fi
-        
-        # 2. Rename the latest report for historical archiving
-        HISTORY_PATH="reports/report_history/firmware_analysis_report_${{ github.run_number }}.html"
-        mkdir -p reports/report_history
-        cp "$REPORT_FILE" "$HISTORY_PATH"
-        echo "Copied report to historical path: $HISTORY_PATH"
-        
-        # 3. Copy the latest report to the root index.html
-        cp "$REPORT_FILE" reports/index.html
-        echo "Copied report to reports/index.html for root URL."
-
-    - name: Upload Report Artifact for GitHub Pages
-      # The artifact is now the 'reports' folder, which contains index.html and the report_history folder.
+    - name: Upload Report Artifacts
+      # Uploads the 'report_history' folder content as the deployment artifact
       uses: actions/upload-pages-artifact@v3
       with:
-        path: reports/
-        
-  # Deployment job runs only after build_and_test is complete and only on the main branch push
-  deploy:
-    needs: build_and_test
-    runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main'
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    steps:
-      - name: Deploy to GitHub Pages
-        id: deployment
-        # This action automatically handles fetching previous deployments and merging content,
-        # which solves the problem of missing history files.
-        uses: actions/deploy-pages@v4
-        with:
-          # This tells the deploy action to look for the 'github-pages' artifact
-          # and publish its contents, correctly merging them on the GitHub Pages server.
-          artifact_name: github-pages
+        path: 'report_history/' 
+
+    - name: Deploy to GitHub Pages
+      id: deployment
+      # Deploys the uploaded artifact to the 'gh-pages' branch
+      uses: actions/deploy-pages@v4
+      
+    # ---------------------------------------------
+    # Docker steps (retained from previous configuration)
+    # ---------------------------------------------
+
+    - name: Log in to GitHub Container Registry (GHCR)
+      if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+      uses: docker/login-action@v3
+      with:
+        registry: ghcr.io
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Build and push Docker image
+      if: github.event_name == 'push' && github.ref == 'refs_heads/main'
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        push: true
+        tags: |
+          ghcr.io/${{ github.repository }}:latest
+          ghcr.io/${{ github.repository }}:${{ github.sha }}
