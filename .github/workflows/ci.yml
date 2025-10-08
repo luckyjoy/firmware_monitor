@@ -29,12 +29,14 @@ jobs:
         python-version: '3.10'
 
     - name: Run Analysis Script and generate reports
-      # CRITICAL FIX: Pass the GitHub Run Number to the script
+      # This runs the Python script, passing the GitHub Run Number.
+      # The script is responsible for creating a filename like: 
+      # firmware_analysis_report_..._build-15.html inside the 'reports/' directory.
       run: python firmware_monitor.py --build-number ${{ github.run_number }}
       
     - name: Prepare Report History Directory for Pages
-      # Move all generated files from the 'reports' directory into 'report_history'.
-      # This ensures deployment uses the correct sub-path structure.
+      # CRITICAL STEP: Move all files into a temporary 'report_history' folder.
+      # This ensures the final deployed URL includes '/report_history/'.
       run: |
         mkdir -p report_history
         mv reports/* report_history/
