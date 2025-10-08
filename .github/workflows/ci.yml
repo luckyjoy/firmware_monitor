@@ -28,24 +28,25 @@ jobs:
 
     - name: Run Analysis Script & Generate Reports
       # Executes firmware_monitor.py and passes the GitHub Actions run number as an argument.
-      # The run number is unique for every workflow run.
+      # We are keeping the run number argument in case you update the Python script later, 
+      # but the CI search relies on the simpler date/time format for now.
       run: python firmware_monitor.py ${{ github.run_number }}
       
     - name: Find and Rename Latest Report to index.html
       id: rename_report
-      # The file name now contains the build number, so we search for that pattern.
+      # FIX: Removed the build number from the search pattern as the Python script output does not contain it yet.
+      # We rely on 'ls -t' to find the most recently created file using the basic date/time stamp.
       run: |
-        # Use the run_number variable to search for the specific file pattern, which now includes the build number
-        REPORT_PATTERN="reports/firmware_analysis_report_*_${{ github.run_number }}.html"
-        REPORT_FILE=$(ls -t $REPORT_PATTERN | head -n 1)
-        
+        REPORT_PATTERN="reports/firmware_analysis_report_*.html"
+        REPORT_FILE=$(ls -t $REPORT_PATTERN | head -n 1) # 'ls -t' sorts by modification time
+
         # Check if REPORT_FILE is empty, which means no file was found
         if [ -z "$REPORT_FILE" ]; then
-          echo "Error: No report file found matching pattern $REPORT_PATTERN"
+          echo "Error: No report file found matching pattern $REPORT_PATTERN. Check the Python script's output file naming."
           exit 1
         fi
         
-        mv $REPORT_FILE reports/index.html
+        mv "$REPORT_FILE" reports/index.html
         echo "Renamed $REPORT_FILE to reports/index.html for GitHub Pages deployment."
         echo "report_path=reports/index.html" >> $GITHUB_OUTPUT
 
