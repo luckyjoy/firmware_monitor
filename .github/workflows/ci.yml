@@ -30,16 +30,17 @@ jobs:
       # Executes firmware_monitor.py, which creates the timestamped reports in ./reports/
       run: python firmware_monitor.py
 
-    - name: Find Latest Report HTML Path
-      id: get_report_path
-      # Gets the exact filename since the script uses a dynamic timestamp
+    - name: Find and Rename Latest Report to index.html
+      id: rename_report
+      # Find the latest timestamped HTML file and move/rename it to index.html in the reports directory.
       run: |
-        # Use a wildcard search and take the first match
-        REPORT_FILE=$(ls reports/firmware_monitor_*.html | head -n 1)
-        echo "report_path=$REPORT_FILE" >> $GITHUB_OUTPUT
+        REPORT_FILE=$(ls -t reports/firmware_monitor_*.html | head -n 1)
+        mv $REPORT_FILE reports/index.html
+        echo "Renamed $REPORT_FILE to reports/index.html for GitHub Pages deployment."
+        echo "report_path=reports/index.html" >> $GITHUB_OUTPUT
 
     - name: Upload Report Artifact for GitHub Pages
-      # Uploads the entire reports folder, which contains the HTML file for deployment
+      # Uploads the entire reports folder, which now contains the latest report renamed as index.html
       uses: actions/upload-pages-artifact@v3
       with:
         path: reports/
