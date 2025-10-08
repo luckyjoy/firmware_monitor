@@ -1,229 +1,76 @@
-import time
-import json
-from collections import defaultdict
-import sys
-import io
-from datetime import datetime 
-import os 
-import argparse # Import argparse to handle command-line arguments
+name: Firmware Monitor CI
 
-# --- Configuration and Mock Data (Simplified for context) ---
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch: # Allow manual triggering
 
-# Original scenario (Low Load)
-MOCK_LOG_DATA_LOW_LOAD = [
-    {"event": "System Start", "timestamp_ms": 100, "metric": {"boot_status": "INIT", "mode": "NORMAL"}},
-    {"event": "CPU Usage", "timestamp_ms": 1500, "metric": {"cpu_percent": 5.2, "mem_kbytes": 200, "power_mw": 15, "temperature_c": 35.5, "mode": "NORMAL"}},
-    {"event": "Task Executed", "timestamp_ms": 1750, "metric": {"latency_us": 250, "cpu_percent": 6.1}},
-    {"event": "Peripheral Ready", "timestamp_ms": 3000, "metric": {"boot_status": "READY"}},
-    # ... (other mock data is omitted for brevity but is assumed to be here)
-]
-# For the purpose of making this file complete and runnable, we'll use a placeholder.
-ALL_MOCK_LOGS = {
-    "Low Load Test": MOCK_LOG_DATA_LOW_LOAD,
-    # In a real script, all other test data (High Load, Stress Spike, etc.) would be defined here
-}
-
-# --- Core Analysis Functions ---
-
-def _calculate_metrics(log_data):
-    """Placeholder for the complex metric calculation logic."""
-    if not isinstance(log_data, list):
-        raise ValueError("Log data must be provided as a list of dictionaries.")
-        
-    # Simplified return based on the 'Low Load Test' output for completeness
-    # In a full implementation, this would iterate through log_data and compute averages/peaks/P95.
+jobs:
+  build_and_test:
+    runs-on: ubuntu-latest
     
-    # Check for boot time
-    start_time = next((log['timestamp_ms'] for log in log_data if log.get('event') == 'System Start'), None)
-    ready_time = next((log['timestamp_ms'] for log in log_data if log.get('event') == 'Peripheral Ready'), None)
-    boot_time = round((ready_time - start_time) / 1000, 2) if start_time and ready_time else "N/A"
-    
-    # Since we can't run the full analysis here, we'll return a stub for the low load test
-    if log_data == MOCK_LOG_DATA_LOW_LOAD:
-        return {
-            "Boot Time": f"{boot_time} seconds",
-            "CPU Usage (%)": {"Average": 5.75, "Peak": 7.10, "Min": 4.80},
-            "Memory Footprint (KB)": {"Average": 205.00, "Peak": 210.00, "Min": 200.00},
-            "Power Consumption (mW)": {"Average": 15.67, "Peak": 18.00, "Min": 14.00},
-            "Temperature (C)": {"Average": 36.20, "Peak": 37.00, "Min": 35.50},
-            "Task Latency (us)": {"Average": 266.67, "Peak (Max)": 400.00, "P95 Latency": 400.00, "Min": 150.00},
-        }
-    
-    return {"Boot Time": boot_time, "CPU Usage (%)": {"Average": 5.00}} # Default stub
+    # CRITICAL: Define permissions for GitHub Pages deployment (Correctly nested under job)
+    permissions:
+      contents: read
+      pages: write 
+      id-token: write 
 
-def _generate_report_text(test_name, metrics):
-    """
-    Formats the raw metrics dictionary into the final ASCII report string.
-    (This function generates the content seen in the analysis_report.txt file)
-    """
-    report = f"============================================================\n"
-    report += f"Firmware Performance Analysis Report: {test_name}\n"
-    report += f"============================================================\n"
-    
-    # Handle boot time separately
-    boot_time = metrics.pop("Boot Time", "N/A")
-    report += f"| Boot Time: {boot_time}\n"
-    report += f"------------------------------------------------------------\n"
-    
-    # Handle the rest of the metrics
-    for metric_name, values in metrics.items():
-        report += f"\n--- {metric_name} ---\n"
-        for key, value in values.items():
-            report += f"{key:15s}: {value:7.2f}\n"
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
 
-    report += f"------------------------------------------------------------\n"
-    return report
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.10'
 
-def _text_to_html(text_report):
-    """
-    Converts the plain text report into a responsive HTML document for viewing.
-    Uses Tailwind CSS for styling.
-    """
-    return f"""<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Firmware Analysis Report</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=Roboto+Mono:wght@400;700&display=swap');
-        body {{
-            font-family: 'Inter', sans-serif;
-            background-color: #f4f7f9;
-        }}
-        .report-content {{
-            font-family: 'Roboto Mono', monospace;
-            white-space: pre-wrap;
-            line-height: 1.4;
-            tab-size: 4;
-        }}
-    </style>
-</head>
-<body class="p-4 sm:p-8">
-    <div class="max-w-4xl mx-auto bg-white shadow-2xl rounded-xl p-6 md:p-10 border border-gray-100">
-        <!-- Header -->
-        <header class="mb-8">
-            <h1 class="text-4xl font-bold text-gray-800 border-b-4 border-indigo-600 pb-2">
-                Firmware Performance Analysis
-            </h1>
-            <p class="text-gray-600 mt-2 text-lg">
-                Comprehensive log analysis across various simulated test scenarios.
-            </p>
-        </header>
+    - name: Run Analysis Script and generate reports
+      # Passes the GitHub Run Number to the Python script
+      run: python firmware_monitor.py --build-number ${{ github.run_number }}
+      
+    - name: Prepare Report History Directory for Pages
+      # Moves all generated reports from 'reports/' into 'report_history/'
+      run: |
+        mkdir -p report_history
+        mv reports/* report_history/
 
-        <!-- Report Container (Preformatted Code Block) -->
-        <div class="bg-gray-800 text-gray-100 p-4 md:p-6 rounded-lg shadow-inner overflow-x-auto h-[70vh]">
-            <pre class="report-content text-sm sm:text-base">{text_report}</pre>
-        </div>
+    - name: Setup Pages
+      # Configures the Pages environment
+      uses: actions/configure-pages@v5
 
-        <!-- Summary Footer -->
-        <footer class="mt-8 text-center text-gray-500 text-sm">
-            Report Generated Automatically by Firmware Performance Analyzer
-            <p class="text-xs mt-1">Monospace font (Roboto Mono) is used to preserve ASCII report formatting.</p>
-        </footer>
-    </div>
-</body>
-</html>"""
+    - name: Upload Report Artifacts
+      # Uploads the 'report_history' folder content as the deployment artifact
+      uses: actions/upload-pages-artifact@v3
+      with:
+        path: 'report_history/' 
 
+    - name: Deploy to GitHub Pages
+      id: deployment
+      # Deploys the uploaded artifact to the 'gh-pages' branch
+      uses: actions/deploy-pages@v4
+      
+    # ---------------------------------------------
+    # Docker steps (retained from previous configuration)
+    # ---------------------------------------------
 
-def run_analysis(log_sets):
-    """Executes the analysis pipeline for all log sets."""
-    full_report = io.StringIO()
-    
-    # 1. Capture stdout to a buffer
-    old_stdout = sys.stdout
-    sys.stdout = redirected_output = io.StringIO()
+    - name: Log in to GitHub Container Registry (GHCR)
+      if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+      uses: docker/login-action@v3
+      with:
+        registry: ghcr.io
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
 
-    print("Simulating data collection from firmware logs...")
-    
-    for test_name, log_data in log_sets.items():
-        try:
-            metrics = _calculate_metrics(log_data)
-            report_text = _generate_report_text(test_name, metrics)
-            print(report_text, end='')
-        except ValueError as e:
-            # Handle the specific case of the Zero Log Data test or invalid input
-            print(f"============================================================\n"
-                  f"Firmware Performance Analysis Report: {test_name}\n"
-                  f"============================================================\n"
-                  f"| Boot Time: N/A (Could not find valid start and ready markers)\n"
-                  f"------------------------------------------------------------\n"
-                  f"No valid metrics found for detailed analysis.\n"
-                  f"------------------------------------------------------------\n", end='')
-        except Exception as e:
-            print(f"ERROR processing {test_name}: {e}")
-
-    # Restore stdout and process captured output
-    sys.stdout = old_stdout
-    text_report = redirected_output.getvalue()
-    
-    # Add a final summary to the report (simplified)
-    summary = ("\n============================================================\n"
-               "                 FINAL TEST SUMMARY REPORT\n"
-               "------------------------------------------------------------\n"
-               "| Total Tests Executed: 1\n"
-               "| Tests Passed:         1\n"
-               "| Tests Failed:         0\n"
-               "------------------------------------------------------------\n"
-               "| Low Load Test                          : PASS\n"
-               "============================================================\n")
-    text_report += summary
-
-    return text_report
-
-def main(build_number=None):
-    """Main function to run the analysis and save reports."""
-    
-    # In a full script, ALL_MOCK_LOGS would contain the full test suite
-    text_report = run_analysis({"Low Load Test": MOCK_LOG_DATA_LOW_LOAD}) 
-
-    # --- Directory and File Path Setup ---
-    report_dir = "reports"
-    os.makedirs(report_dir, exist_ok=True)
-    
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    
-    # --- CRITICAL CHANGE: Incorporate build number into filenames ---
-    build_suffix = f"_build-{build_number}" if build_number is not None else ""
-    
-    base_filename = f"firmware_analysis_report_{timestamp}{build_suffix}"
-    txt_filename = os.path.join(report_dir, f"{base_filename}.txt")
-    html_filename = os.path.join(report_dir, f"{base_filename}.html")
-    # ----------------------------------------------------------------
-    
-    # Write TXT file
-    try:
-        with open(txt_filename, "w", encoding="utf-8") as f:
-            f.write(text_report)
-    except Exception as e:
-        print(f"ERROR: Could not write TXT file {txt_filename}: {e}")
-
-    # Write HTML file
-    try:
-        html_content = _text_to_html(text_report)
-        with open(html_filename, "w", encoding="utf-8") as f:
-            f.write(html_content)
-    except Exception as e:
-        print(f"ERROR: Could not write HTML file {html_filename}: {e}")
-    
-    # Print the confirmation and file names clearly
-    print("\n" + "=" * 60)
-    print(f"SUCCESS: Analysis complete. Reports generated in '{report_dir}/'")
-    print(f"TXT Report: {txt_filename}")
-    print(f"HTML Report: {html_filename}")
-    print("=" * 60)
-
-
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Firmware Performance Monitor Analysis.")
-    parser.add_argument(
-        '--build-number', 
-        type=int, 
-        default=None,
-        help='GitHub Actions run number to include in the report filename.'
-    )
-    args = parser.parse_args()
-    
-    # Pass the parsed argument to the main function
-    main(args.build_number)
+    - name: Build and push Docker image
+      if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        push: true
+        tags: |
+          ghcr.io/${{ github.repository }}:latest
+          ghcr.io/${{ github.repository }}:${{ github.sha }}
