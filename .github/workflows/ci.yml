@@ -27,17 +27,21 @@ jobs:
         python-version: '3.10'
 
     - name: Run Analysis Script & Generate Reports
-      # Executes firmware_monitor.py, which creates the timestamped reports in ./reports/
-      run: python firmware_monitor.py
-
+      # Executes firmware_monitor.py and passes the GitHub Actions run number as an argument.
+      # The run number is unique for every workflow run.
+      run: python firmware_monitor.py ${{ github.run_number }}
+      
     - name: Find and Rename Latest Report to index.html
       id: rename_report
-      # Find the latest timestamped HTML file (using the correct filename prefix) and move/rename it to index.html in the reports directory.
+      # The file name now contains the build number, so we search for that pattern.
       run: |
-        REPORT_FILE=$(ls -t reports/firmware_analysis_report_*.html | head -n 1)
+        # Use the run_number variable to search for the specific file pattern, which now includes the build number
+        REPORT_PATTERN="reports/firmware_analysis_report_*_${{ github.run_number }}.html"
+        REPORT_FILE=$(ls -t $REPORT_PATTERN | head -n 1)
+        
         # Check if REPORT_FILE is empty, which means no file was found
         if [ -z "$REPORT_FILE" ]; then
-          echo "Error: No firmware_analysis_report_*.html file found in reports/ directory."
+          echo "Error: No report file found matching pattern $REPORT_PATTERN"
           exit 1
         fi
         
