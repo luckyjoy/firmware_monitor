@@ -1,191 +1,105 @@
-import time
-import json
-from collections import defaultdict
-import sys
-import io
-import os
-import argparse # <-- NEW: Import argparse for command line arguments
+name: Firmware Monitor CI
 
-# --- Configuration and Mock Data (Same as previous version) ---
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
 
-# Original scenario (Low Load)
-MOCK_LOG_DATA_LOW_LOAD = [
-    {"event": "System Start", "timestamp_ms": 100, "metric": {"boot_status": "INIT", "mode": "NORMAL"}},
-    {"event": "CPU Usage", "timestamp_ms": 1500, "metric": {"cpu_percent": 5.2, "mem_kbytes": 200, "power_mw": 15, "temperature_c": 35.5, "mode": "NORMAL"}},
-    {"event": "Task Executed", "timestamp_ms": 1750, "metric": {"latency_us": 250, "cpu_percent": 6.1}},
-    {"event": "CPU Usage", "timestamp_ms": 2500, "metric": {"cpu_percent": 4.8, "mem_kbytes": 205, "power_mw": 14, "temperature_c": 36.1, "mode": "NORMAL"}},
-    {"event": "Peripheral Ready", "timestamp_ms": 3000, "metric": {"boot_status": "READY"}},
-    {"event": "Task Executed", "timestamp_ms": 3100, "metric": {"latency_us": 150, "cpu_percent": 5.0}},
-    {"event": "System End", "timestamp_ms": 5000, "metric": {"shutdown_status": "CLEAN"}},
-]
+# CRITICAL: Define workflow-level permissions here. This simplifies the syntax 
+# and provides all necessary access for both Pages and GHCR tasks.
+permissions:
+  contents: write    # For checkout and build metadata/attestations
+  pages: write       # For deploying to GitHub Pages
+  id-token: write    # For authentication with Pages deployment action
+  packages: write    # For pushing Docker images to GHCR (the original fix)
 
-# Scenario 2 (High Load/Warning Condition)
-MOCK_LOG_DATA_HIGH_LOAD = [
-    {"event": "System Start", "timestamp_ms": 100, "metric": {"boot_status": "INIT", "mode": "HIGH_POWER"}},
-    {"event": "CPU Usage", "timestamp_ms": 500, "metric": {"cpu_percent": 85.5, "mem_kbytes": 850, "power_mw": 250, "temperature_c": 75.0, "mode": "HIGH_POWER"}},
-    {"event": "Task Executed", "timestamp_ms": 750, "metric": {"latency_us": 1500, "cpu_percent": 90.1}},
-    {"event": "CPU Usage", "timestamp_ms": 1500, "metric": {"cpu_percent": 92.0, "mem_kbytes": 900, "power_mw": 300, "temperature_c": 80.5, "mode": "HIGH_POWER"}},
-    {"event": "Error Logged", "timestamp_ms": 1600, "metric": {"error_code": 501, "message": "High Temperature Warning"}},
-    {"event": "System End", "timestamp_ms": 3000, "metric": {"shutdown_status": "FORCE_SHUTDOWN"}},
-]
-
-# --- Analysis Functions ---
-
-def _text_to_html(text_report):
-    """Converts a plain text report into a minimal HTML page."""
+jobs:
+  build_and_test:
+    runs-on: ubuntu-latest
     
-    # Simple styling for readability
-    html_template = """
-    <!DOCTYPE html>
-    <html lang="en">
-    <head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Firmware Analysis Report</title>
-        <style>
-            body {{ font-family: 'Consolas', 'Courier New', monospace; background-color: #f4f4f9; color: #333; padding: 20px; }}
-            .report-container {{ background-color: #ffffff; border: 1px solid #ddd; padding: 30px; border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); max-width: 900px; margin: 0 auto; white-space: pre-wrap; }}
-            h1 {{ color: #0056b3; border-bottom: 2px solid #0056b3; padding-bottom: 10px; }}
-            .section-title {{ color: #28a745; margin-top: 25px; border-bottom: 1px solid #28a745; padding-bottom: 5px; }}
-        </style>
-    </head>
-    <body>
-        <div class="report-container">
-            {content}
-        </div>
-    </body>
-    </html>
-    """
-    
-    # Replace newlines with <br> for HTML and format the content
-    html_content = text_report.replace("\n", "<br>")
-    
-    # Replace section titles for better HTML styling (simple string replacements)
-    html_content = html_content.replace("===" * 10, '<div class="section-title">')
-    html_content = html_content.replace("ANALYSIS REPORT", "<h1>Firmware Analysis Report</h1>")
-    html_content = html_content.replace("Summary", "Summary</div>")
-    html_content = html_content.replace("Event Timeline", "Event Timeline</div>")
-    html_content = html_content.replace("Performance Metrics", "Performance Metrics</div>")
-    html_content = html_content.replace("Warning/Error Log", "Warning/Error Log</div>")
-    
-    return html_template.format(content=html_content)
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
 
-def analyze_firmware_log(log_data, scenario_name="Unknown Scenario"):
-    """Performs a mock analysis on the provided log data."""
-    
-    # 1. State Tracking and Aggregation
-    events = [item['event'] for item in log_data]
-    metrics = defaultdict(list)
-    errors = []
-    
-    for item in log_data:
-        # Aggregate performance metrics
-        if 'CPU Usage' in item['event'] or 'Task Executed' in item['event']:
-            for key, value in item['metric'].items():
-                if isinstance(value, (int, float)):
-                    metrics[key].append(value)
-        # Log errors/warnings
-        if 'Error Logged' in item['event'] or 'Warning' in str(item['metric'].get('message')):
-            errors.append((item['timestamp_ms'], item['metric']['message']))
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.10'
 
-    # 2. Generate Report Output (to stdout)
-    print("=" * 30)
-    print("FIRMWARE ANALYSIS REPORT")
-    print(f"Scenario: {scenario_name}")
-    print("=" * 30)
-    
-    print("\n" + "=" * 10 + " Summary " + "=" * 10)
-    print(f"Total Log Entries: {len(log_data)}")
-    print(f"First Event: {log_data[0]['event']} @ {log_data[0]['timestamp_ms']}ms")
-    print(f"Last Event: {log_data[-1]['event']} @ {log_data[-1]['timestamp_ms']}ms")
-    print(f"Total Duration: {log_data[-1]['timestamp_ms'] - log_data[0]['timestamp_ms']}ms")
-    
-    print("\n" + "=" * 10 + " Event Timeline " + "=" * 10)
-    for item in log_data:
-        print(f"[{item['timestamp_ms']}ms] {item['event']}: {item['metric']}")
-
-    print("\n" + "=" * 10 + " Performance Metrics " + "=" * 10)
-    if metrics:
-        for key in metrics:
-            data = metrics[key]
-            if data:
-                print(f"- {key}:")
-                print(f"  Min: {min(data):.2f}, Max: {max(data):.2f}, Avg: {sum(data)/len(data):.2f}")
-    else:
-        print("No quantifiable performance metrics found.")
-
-    print("\n" + "=" * 10 + " Warning/Error Log " + "=" * 10)
-    if errors:
-        for timestamp, msg in errors:
-            print(f"[ERROR @ {timestamp}ms] {msg}")
-    else:
-        print("No errors or warnings recorded.")
+    - name: Run Analysis Script & Prepare Reports
+      # 1. Run the script using the build number argument (which we fixed in the script).
+      # 2. Set up the GitHub Pages directory structure (index.html for latest, plus history).
+      run: |
+        REPORT_FILE="reports/firmware_analysis_report_${{ github.run_number }}.html"
+        python firmware_monitor.py --build-number ${{ github.run_number }}
         
-    print("=" * 30)
-    print("ANALYSIS COMPLETE.")
-    print("=" * 30)
+        # Ensure the reports directory exists
+        mkdir -p reports/report_history
+        
+        # Copy the report to the historical path
+        cp "$REPORT_FILE" reports/report_history/
+        
+        # Copy the latest report to the root index.html path for the main pages URL
+        cp "$REPORT_FILE" reports/index.html
+        
+    - name: Upload Report Artifact
+      # Upload the entire 'reports' directory (containing index.html and report_history/)
+      uses: actions/upload-pages-artifact@v3
+      with:
+        path: 'reports/' 
+        
+    # ---------------------------------------------
+    # Docker Image Build/Push for GHCR
+    # ---------------------------------------------
 
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
 
-def main(): # <-- NEW: Encapsulate logic in main() to use arguments
-    """Parses command line arguments and runs the analysis."""
-    parser = argparse.ArgumentParser(description="Run firmware log analysis and generate reports.")
-    parser.add_argument(
-        '--build-number', 
-        type=int, 
-        default=999, 
-        help="CI Build Run Number to use in the output filename."
-    )
-    args = parser.parse_args()
-    build_number = args.build_number
+    - name: Build Local Analysis Image Dockerfile
+      run: |
+        cat <<EOF > Dockerfile.ci
+        FROM python:3.10-slim
+        WORKDIR /app
+        COPY firmware_monitor.py .
+        CMD ["python", "firmware_monitor.py"]
+        EOF
+        
+    - name: Log in to GitHub Container Registry (GHCR)
+      # Only login on main branch push
+      if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+      uses: docker/login-action@v3
+      with:
+        registry: ghcr.io
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Build and push Docker image
+      # Only push on main branch push
+      if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        push: true
+        file: Dockerfile.ci
+        tags: |
+          ghcr.io/${{ github.repository }}:latest
+          ghcr.io/${{ github.repository }}:${{ github.sha }}
+
+  deploy:
+    # This job handles the Pages deployment in isolation
+    needs: build_and_test
+    runs-on: ubuntu-latest
+    # Only run on main branch push
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
     
-    # 1. Choose scenario (e.g., based on time or another random factor)
-    # For CI stability, let's run the HIGH LOAD scenario
-    current_log_data = MOCK_LOG_DATA_HIGH_LOAD
-    scenario = "High Load (Simulated CI Failure Mode)"
-
-    # 2. Capture the analysis output
-    old_stdout = sys.stdout
-    redirected_output = io.StringIO()
-    sys.stdout = redirected_output
-    
-    # 3. Run analysis (output goes to redirected_output)
-    analyze_firmware_log(current_log_data, scenario)
-
-    # 4. Restore stdout and process captured output
-    sys.stdout = old_stdout
-    text_report = redirected_output.getvalue()
-
-    # --- Directory and File Path Setup ---
-    report_dir = "reports"
-    # Ensure the reports directory exists
-    os.makedirs(report_dir, exist_ok=True)
-    
-    # Filenames NOW use the build number!
-    report_base_name = f"firmware_analysis_report_{build_number}"
-    txt_filename = os.path.join(report_dir, f"{report_base_name}.txt")
-    html_filename = os.path.join(report_dir, f"{report_base_name}.html")
-    
-    # Write TXT file
-    try:
-        with open(txt_filename, "w", encoding="utf-8") as f:
-            f.write(text_report)
-    except Exception as e:
-        print(f"ERROR: Could not write TXT file {txt_filename}: {e}")
-
-    # Write HTML file
-    try:
-        html_content = _text_to_html(text_report)
-        with open(html_filename, "w", encoding="utf-8") as f:
-            f.write(html_content)
-    except Exception as e:
-        print(f"ERROR: Could not write HTML file {html_filename}: {e}")
-    
-    # 5. Print the confirmation and file names clearly to the actual console (stdout)
-    print("\n" + "=" * 30)
-    print(f"Analysis Report Generated for Build #{build_number}")
-    print(f"TXT Report Path: {txt_filename}")
-    print(f"HTML Report Path: {html_filename}")
-    print("=" * 30)
-
-if __name__ == "__main__":
-    main()
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
