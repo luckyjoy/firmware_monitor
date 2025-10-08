@@ -52,10 +52,10 @@ jobs:
     - name: Find and Rename Latest Report to index.html
       id: rename_report
       # The files are now in the host's ./reports directory due to the volume mount.
-      # Use 'ls -t' to find the most recently created file, which is the safest method.
       run: |
+        # 1. Find the latest generated report (e.g., firmware_analysis_report_2025...html)
         REPORT_PATTERN="reports/firmware_analysis_report_*.html"
-        REPORT_FILE=$(ls -t $REPORT_PATTERN | head -n 1) # 'ls -t' sorts by modification time
+        REPORT_FILE=$(ls -t $REPORT_PATTERN | head -n 1) # 'ls -t' finds newest file
 
         # Check if REPORT_FILE is empty, which means no file was found
         if [ -z "$REPORT_FILE" ]; then
@@ -63,14 +63,21 @@ jobs:
           exit 1
         fi
         
-        # Move the file within the host runner environment
-        mv "$REPORT_FILE" reports/index.html
-        echo "Renamed $REPORT_FILE to reports/index.html for GitHub Pages deployment."
+        # 2. Create the historical path structure (reports/report_history/)
+        mkdir -p reports/report_history
+        
+        # 3. Copy the report to the historical directory using the BUILD NUMBER
+        HISTORY_PATH="reports/report_history/firmware_analysis_report_${{ github.run_number }}.html"
+        cp "$REPORT_FILE" "$HISTORY_PATH"
+        echo "Copied report to historical path: $HISTORY_PATH"
+        
+        # 4. Copy the report to index.html (the current report shown at the root URL)
+        cp "$REPORT_FILE" reports/index.html
+        echo "Copied report to reports/index.html for root URL."
         echo "report_path=reports/index.html" >> $GITHUB_OUTPUT
 
     - name: Upload Report Artifact for GitHub Pages
-      # Uploads the directory containing the report (now named index.html).
-      # The path is relative to the workspace, which is './reports'
+      # Uploads the directory containing the report (now named index.html and the report_history folder).
       uses: actions/upload-pages-artifact@v3
       with:
         path: reports/
