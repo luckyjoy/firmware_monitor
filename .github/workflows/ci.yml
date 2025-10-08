@@ -13,7 +13,7 @@ jobs:
   build_and_test:
     runs-on: ubuntu-latest
     
-    # CRITICAL: Define permissions for GitHub Pages deployment (Correctly nested under job)
+    # CRITICAL: Define permissions for GitHub Pages deployment
     permissions:
       contents: read
       pages: write 
@@ -29,11 +29,12 @@ jobs:
         python-version: '3.10'
 
     - name: Run Analysis Script and generate reports
-      # Passes the GitHub Run Number to the Python script
-      run: python firmware_monitor.py --build-number ${{ github.run_number }}
-      
+      # Passes the GitHub Run Number. Assumes firmware_monitor.py uses argparse
+      run: |
+        python firmware_monitor.py --build-number ${{ github.run_number }}
+        
     - name: Prepare Report History Directory for Pages
-      # Moves all generated reports from 'reports/' into 'report_history/'
+      # The script generates files in 'reports/'. We move them into the final deployment structure.
       run: |
         mkdir -p report_history
         mv reports/* report_history/
@@ -50,13 +51,27 @@ jobs:
 
     - name: Deploy to GitHub Pages
       id: deployment
-      # Deploys the uploaded artifact to the 'gh-pages' branch
+      # Deploys the uploaded artifact
       uses: actions/deploy-pages@v4
       
     # ---------------------------------------------
-    # Docker steps (retained from previous configuration)
+    # Docker Image Build/Push for GHCR
     # ---------------------------------------------
 
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Build Local Analysis Image (No requirements.txt needed)
+      # Creates a minimal Dockerfile.ci on the fly to avoid external dependencies like requirements.txt.
+      run: |
+        cat <<EOF > Dockerfile.ci
+        FROM python:3.10-slim
+        WORKDIR /app
+        # Only copy the essential script
+        COPY firmware_monitor.py .
+        CMD ["python", "firmware_monitor.py"]
+        EOF
+        
     - name: Log in to GitHub Container Registry (GHCR)
       if: github.event_name == 'push' && github.ref == 'refs/heads/main'
       uses: docker/login-action@v3
@@ -71,6 +86,7 @@ jobs:
       with:
         context: .
         push: true
+        file: Dockerfile.ci # Use the dynamically created Dockerfile
         tags: |
           ghcr.io/${{ github.repository }}:latest
           ghcr.io/${{ github.repository }}:${{ github.sha }}
