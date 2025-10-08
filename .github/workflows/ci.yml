@@ -49,14 +49,6 @@ jobs:
           firmware-monitor-ci \
           python firmware_monitor.py ${{ github.run_number }}
       
-    # --- New steps to manage historical reports ---
-    - name: Download Existing Deployment Artifact (History)
-      uses: actions/download-artifact@v4
-      with:
-        name: github-pages
-        path: reports/ # Download the previous deployment content into the reports folder
-      continue-on-error: true # Allow this step to fail if it's the first run and no artifact exists
-
     - name: Prepare Reports for Deployment
       id: prepare_reports
       run: |
@@ -69,11 +61,9 @@ jobs:
           exit 1
         fi
         
-        # 2. Ensure historical path exists and copy the new report into the history folder
-        mkdir -p reports/report_history
+        # 2. Rename the latest report for historical archiving
         HISTORY_PATH="reports/report_history/firmware_analysis_report_${{ github.run_number }}.html"
-        
-        # We use 'cp' instead of 'mv' to keep the original file for the next step's index creation
+        mkdir -p reports/report_history
         cp "$REPORT_FILE" "$HISTORY_PATH"
         echo "Copied report to historical path: $HISTORY_PATH"
         
@@ -82,7 +72,7 @@ jobs:
         echo "Copied report to reports/index.html for root URL."
 
     - name: Upload Report Artifact for GitHub Pages
-      # Uploads the COMPLETE directory (index.html + report_history folder)
+      # The artifact is now the 'reports' folder, which contains index.html and the report_history folder.
       uses: actions/upload-pages-artifact@v3
       with:
         path: reports/
@@ -98,4 +88,10 @@ jobs:
     steps:
       - name: Deploy to GitHub Pages
         id: deployment
+        # This action automatically handles fetching previous deployments and merging content,
+        # which solves the problem of missing history files.
         uses: actions/deploy-pages@v4
+        with:
+          # This tells the deploy action to look for the 'github-pages' artifact
+          # and publish its contents, correctly merging them on the GitHub Pages server.
+          artifact_name: github-pages
