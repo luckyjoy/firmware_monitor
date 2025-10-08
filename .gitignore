@@ -6,7 +6,8 @@ examples/
 supports/*.py
 allure-results/
 tmp/
-reports/
+reports/*.html
+reports/firmware_analysis_report*.txt
 
 # VM images & snapshots (HUGE files, never commit)
 *.qcow2
@@ -43,5 +44,5 @@ Thumbs.db
 .DS_Store
 *.tmp
 *.swp
-g.bat
-build.bat
+*.bat
+*.txt
