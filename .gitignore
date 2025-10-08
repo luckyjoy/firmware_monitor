@@ -6,6 +6,7 @@ examples/
 supports/*.py
 allure-results/
 tmp/
+reports/
 
 # VM images & snapshots (HUGE files, never commit)
 *.qcow2
@@ -31,6 +32,7 @@ __pycache__/
 # Build/virtualenv
 .env/
 .venv/
+.git/
 env/
 venv/
 dist/

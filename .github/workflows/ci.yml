@@ -8,7 +8,7 @@ on:
     branches:
       - main
 
-# Grant GITHUB_TOKEN write permission for contents and pages
+# Grant GITHUB_TOKEN permissions for contents and pages deployment
 permissions:
   contents: write
   pages: write
@@ -27,46 +27,31 @@ jobs:
         python-version: '3.10'
 
     - name: Run Analysis Script & Generate Reports
-      # Execute the self-contained script. Reports are saved in ./reports/
+      # Executes firmware_monitor.py, which creates the timestamped reports in ./reports/
       run: python firmware_monitor.py
 
     - name: Find Latest Report HTML Path
       id: get_report_path
-      # Get the actual filename since the script uses a dynamic timestamp
+      # Gets the exact filename since the script uses a dynamic timestamp
       run: |
+        # Use a wildcard search and take the first match
         REPORT_FILE=$(ls reports/firmware_monitor_*.html | head -n 1)
         echo "report_path=$REPORT_FILE" >> $GITHUB_OUTPUT
-        echo "filename=$(basename $REPORT_FILE)" >> $GITHUB_OUTPUT
 
     - name: Upload Report Artifact for GitHub Pages
-      # Uploads the entire reports folder, but we will focus on the latest HTML file
+      # Uploads the entire reports folder, which contains the HTML file for deployment
       uses: actions/upload-pages-artifact@v3
       with:
         path: reports/
+        
+    # Docker build steps are omitted here as per conversation, but could be re-added
+    # if the Dockerfile is corrected to not rely on requirements.txt.
 
-    - name: Log in to GitHub Container Registry (GHCR)
-      if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-      uses: docker/login-action@v3
-      with:
-        registry: ghcr.io
-        username: ${{ github.actor }}
-        password: ${{ secrets.GITHUB_TOKEN }}
-
-    - name: Build and push Docker image
-      if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-      uses: docker/build-push-action@v5
-      with:
-        context: .
-        push: true
-        tags: |
-          ghcr.io/${{ github.repository }}:latest
-          ghcr.io/${{ github.repository }}:${{ github.sha }}
-
-  # Deployment job runs only after build_and_test is complete
+  # Deployment job runs only after build_and_test is complete and only on the main branch push
   deploy:
     needs: build_and_test
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main' # Only deploy for pushes to main
+    if: github.ref == 'refs/heads/main'
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
@@ -74,4 +59,3 @@ jobs:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
-
