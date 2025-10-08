@@ -13,11 +13,12 @@ jobs:
   build_and_test:
     runs-on: ubuntu-latest
     
-    # CRITICAL: Define permissions for GitHub Pages deployment
+    # CRITICAL: Define permissions for GitHub Pages deployment AND GHCR Push
     permissions:
       contents: read
       pages: write 
       id-token: write 
+      packages: write # <-- THIS IS THE FIX: Grants permission to push Docker images to GHCR
 
     steps:
     - name: Checkout code
@@ -29,7 +30,7 @@ jobs:
         python-version: '3.10'
 
     - name: Run Analysis Script and generate reports
-      # Passes the GitHub Run Number. Assumes firmware_monitor.py uses argparse
+      # Passes the GitHub Run Number to the script for file naming
       run: |
         python firmware_monitor.py --build-number ${{ github.run_number }}
         
