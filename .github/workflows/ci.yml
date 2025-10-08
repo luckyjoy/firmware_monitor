@@ -51,7 +51,8 @@ jobs:
       
     - name: Find and Rename Latest Report to index.html
       id: rename_report
-      # The files are now in the host's ./reports directory due to the volume mount
+      # The files are now in the host's ./reports directory due to the volume mount.
+      # Use 'ls -t' to find the most recently created file, which is the safest method.
       run: |
         REPORT_PATTERN="reports/firmware_analysis_report_*.html"
         REPORT_FILE=$(ls -t $REPORT_PATTERN | head -n 1) # 'ls -t' sorts by modification time
