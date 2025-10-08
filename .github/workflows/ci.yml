@@ -17,25 +17,41 @@ permissions:
 jobs:
   build_and_test:
     runs-on: ubuntu-latest
+    
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
 
-    - name: Set up Python
-      uses: actions/setup-python@v5
-      with:
-        python-version: '3.10'
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+      
+    - name: Build Local Analysis Image
+      # Builds a simple image based on python:3.10-slim for consistency, 
+      # copying only the necessary script (firmware_monitor.py).
+      run: |
+        cat <<EOF > Dockerfile.ci
+        FROM python:3.10-slim
+        WORKDIR /app
+        COPY firmware_monitor.py .
+        CMD ["python", "firmware_monitor.py"]
+        EOF
+        docker build -t firmware-monitor-ci -f Dockerfile.ci .
 
-    - name: Run Analysis Script & Generate Reports
-      # Executes firmware_monitor.py and passes the GitHub Actions run number as an argument.
-      # We are keeping the run number argument in case you update the Python script later, 
-      # but the CI search relies on the simpler date/time format for now.
-      run: python firmware_monitor.py ${{ github.run_number }}
+    - name: Run Analysis Script & Generate Reports (via Docker Run)
+      # Executes the script inside the newly built container using 'docker run'.
+      # -v $(pwd)/reports:/app/reports mounts the host reports directory to the container's /app/reports.
+      # The script output is thus available on the host runner after the container exits.
+      run: |
+        mkdir -p reports # Ensure host reports directory exists
+        docker run \
+          --name analysis-run \
+          -v $(pwd)/reports:/app/reports \
+          firmware-monitor-ci \
+          python firmware_monitor.py ${{ github.run_number }}
       
     - name: Find and Rename Latest Report to index.html
       id: rename_report
-      # FIX: Removed the build number from the search pattern as the Python script output does not contain it yet.
-      # We rely on 'ls -t' to find the most recently created file using the basic date/time stamp.
+      # The files are now in the host's ./reports directory due to the volume mount
       run: |
         REPORT_PATTERN="reports/firmware_analysis_report_*.html"
         REPORT_FILE=$(ls -t $REPORT_PATTERN | head -n 1) # 'ls -t' sorts by modification time
@@ -46,19 +62,18 @@ jobs:
           exit 1
         fi
         
+        # Move the file within the host runner environment
         mv "$REPORT_FILE" reports/index.html
         echo "Renamed $REPORT_FILE to reports/index.html for GitHub Pages deployment."
         echo "report_path=reports/index.html" >> $GITHUB_OUTPUT
 
     - name: Upload Report Artifact for GitHub Pages
-      # Uploads the entire reports folder, which now contains the latest report renamed as index.html
+      # Uploads the directory containing the report (now named index.html).
+      # The path is relative to the workspace, which is './reports'
       uses: actions/upload-pages-artifact@v3
       with:
         path: reports/
         
-    # Docker build steps are omitted here as per conversation, but could be re-added
-    # if the Dockerfile is corrected to not rely on requirements.txt.
-
   # Deployment job runs only after build_and_test is complete and only on the main branch push
   deploy:
     needs: build_and_test
