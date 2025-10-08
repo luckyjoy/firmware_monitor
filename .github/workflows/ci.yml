@@ -49,35 +49,40 @@ jobs:
           firmware-monitor-ci \
           python firmware_monitor.py ${{ github.run_number }}
       
-    - name: Find and Rename Latest Report to index.html
-      id: rename_report
-      # The files are now in the host's ./reports directory due to the volume mount.
+    # --- New steps to manage historical reports ---
+    - name: Download Existing Deployment Artifact (History)
+      uses: actions/download-artifact@v4
+      with:
+        name: github-pages
+        path: reports/ # Download the previous deployment content into the reports folder
+      continue-on-error: true # Allow this step to fail if it's the first run and no artifact exists
+
+    - name: Prepare Reports for Deployment
+      id: prepare_reports
       run: |
-        # 1. Find the latest generated report (e.g., firmware_analysis_report_2025...html)
+        # 1. Find the latest generated report (e.g., reports/firmware_analysis_report_2025...html)
         REPORT_PATTERN="reports/firmware_analysis_report_*.html"
         REPORT_FILE=$(ls -t $REPORT_PATTERN | head -n 1) # 'ls -t' finds newest file
 
-        # Check if REPORT_FILE is empty, which means no file was found
         if [ -z "$REPORT_FILE" ]; then
-          echo "Error: No report file found matching pattern $REPORT_PATTERN. Check the Python script's output file naming."
+          echo "Error: No report file found matching pattern $REPORT_PATTERN."
           exit 1
         fi
         
-        # 2. Create the historical path structure (reports/report_history/)
+        # 2. Ensure historical path exists and copy the new report into the history folder
         mkdir -p reports/report_history
-        
-        # 3. Copy the report to the historical directory using the BUILD NUMBER
         HISTORY_PATH="reports/report_history/firmware_analysis_report_${{ github.run_number }}.html"
+        
+        # We use 'cp' instead of 'mv' to keep the original file for the next step's index creation
         cp "$REPORT_FILE" "$HISTORY_PATH"
         echo "Copied report to historical path: $HISTORY_PATH"
         
-        # 4. Copy the report to index.html (the current report shown at the root URL)
+        # 3. Copy the latest report to the root index.html
         cp "$REPORT_FILE" reports/index.html
         echo "Copied report to reports/index.html for root URL."
-        echo "report_path=reports/index.html" >> $GITHUB_OUTPUT
 
     - name: Upload Report Artifact for GitHub Pages
-      # Uploads the directory containing the report (now named index.html and the report_history folder).
+      # Uploads the COMPLETE directory (index.html + report_history folder)
       uses: actions/upload-pages-artifact@v3
       with:
         path: reports/
