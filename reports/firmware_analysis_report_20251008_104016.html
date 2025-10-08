@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Compact Firmware Analysis Report</title>
+    <style>
+        body { 
+            font-family: 'Inter', sans-serif; 
+            background-color: #f0f4f8; 
+            color: #1a202c; 
+            padding: 20px; 
+            margin: 0;
+            line-height: 1.5;
+        }
+        .container { 
+            max-width: 1200px; 
+            margin: 0 auto; 
+            background-color: #ffffff;
+            padding: 20px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+            border-radius: 12px;
+        }
+        h1 { 
+            color: #1d4ed8; 
+            border-bottom: 3px solid #bfdbfe; 
+            padding-bottom: 10px; 
+            margin-bottom: 20px;
+            font-size: 2em;
+        }
+        .author-info { 
+            color: #4b5563; 
+            font-size: 0.9em; 
+            margin-bottom: 25px; 
+            border-bottom: 1px dashed #e5e7eb;
+            padding-bottom: 10px;
+        }
+        
+        /* --- GRID LAYOUT FOR SCENARIO CARDS --- */
+        .report-grid {
+            /* This is the container for all individual scenario report blocks */
+            display: grid;
+            grid-template-columns: 1fr; /* Default: Single column for mobile */
+            gap: 20px;
+            margin-top: 15px;
+        }
+        @media (min-width: 768px) {
+            .report-grid {
+                grid-template-columns: 1fr 1fr; /* Two columns on tablet/desktop */
+            }
+        }
+        
+        .scenario-card { 
+            background-color: #f9fafb; 
+            border: 1px solid #e5e7eb; 
+            padding: 15px; 
+            margin-bottom: 0; 
+            border-radius: 8px; 
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+        }
+        .scenario-card h3 { 
+            color: #059669; 
+            font-size: 1.4em; 
+            margin-top: 0; 
+            margin-bottom: 10px; 
+            border-bottom: 2px solid #a7f3d0;
+            padding-bottom: 5px;
+        }
+        .scenario-card h4 { 
+            color: #3b82f6; 
+            font-size: 1.1em; 
+            margin-top: 15px; 
+            margin-bottom: 8px;
+            font-weight: 600;
+        }
+
+        /* --- NEW GRID FOR SCENARIO METRIC GROUPS (2-3 COLUMNS) --- */
+        .metric-group {
+            /* This targets groups like "CPU Usage (%)" and "Task Latency (us)" */
+            display: grid;
+            grid-template-columns: 1fr; /* Mobile: 1 column */
+            gap: 10px; 
+            margin-bottom: 15px;
+        }
+        @media (min-width: 640px) {
+            .metric-group {
+                grid-template-columns: 1fr 1fr; /* Tablet/Medium: 2 columns */
+            }
+        }
+        @media (min-width: 1024px) {
+            .metric-group {
+                grid-template-columns: 1fr 1fr 1fr; /* Desktop: 3 columns */
+            }
+        }
+
+        .metric-item {
+            display: flex;
+            justify-content: space-between;
+            background-color: #ffffff;
+            padding: 8px 12px;
+            border-radius: 6px;
+            border-left: 4px solid #fcd34d;
+            font-size: 0.9em;
+            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
+            /* Remove margin-top since the grid gap handles spacing now */
+        }
+        /* Specific styling for the single boot metric to stand out slightly */
+        .metric-item.single-metric {
+            border-left: 4px solid #34d399; /* Green border for boot time */
+        }
+        .metric-key {
+            color: #4b5563;
+            font-weight: 500;
+        }
+        .metric-value {
+            color: #1f2937;
+            font-weight: 700;
+        }
+
+        /* Summary Card Styling */
+        .summary-card {
+            background-color: #dbeafe;
+            border: 2px solid #93c5fd;
+            padding: 20px;
+            margin-top: 30px;
+            border-radius: 10px;
+        }
+        .summary-card h2 {
+            color: #1e3a8a;
+            font-size: 1.8em;
+            margin-top: 0;
+            margin-bottom: 15px;
+            text-align: center;
+        }
+        .summary-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 5px 0;
+            border-bottom: 1px dotted #93c5fd;
+        }
+        .summary-key { font-weight: 600; color: #1f2937; }
+        .summary-value { font-weight: 700; color: #10b981; }
+        .summary-value.time { font-weight: 700; color: #f97316; } /* Orange for time */
+        
+        /* --- GRID FOR FINAL TEST RESULTS (2-3 COLUMNS) --- */
+        .test-result-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr); /* Tablet/Default: 2 columns */
+            gap: 10px;
+            margin-top: 15px;
+        }
+        @media (min-width: 1024px) {
+            .test-result-grid {
+                grid-template-columns: repeat(3, 1fr); /* Desktop: 3 columns */
+            }
+        }
+        @media (max-width: 640px) {
+            .test-result-grid {
+                grid-template-columns: 1fr; /* Mobile: 1 column */
+            }
+        }
+
+        .test-result {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px 10px;
+            border-radius: 6px; 
+            font-size: 0.85em;
+            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+            min-width: 150px; 
+        }
+        .test-name {
+            margin-right: 10px;
+            overflow-wrap: break-word;
+            word-break: break-word;
+        }
+        .test-status { 
+            font-weight: 700; 
+            flex-shrink: 0; 
+        }
+        .test-result.pass { background-color: #d1fae5; border-left: 3px solid #10b981; }
+        .test-result.fail { background-color: #fee2e2; border-left: 3px solid #ef4444; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Firmware Performance Analysis Comprehensive Report</h1>
+        <p class="author-info">Author: Bang Thien Nguyen ontario1998@gmail.com</p>
+        
+        <!-- Scenario Cards Grid -->
+        <div class="report-grid">
+            <div class="scenario-card"><h3>Low Load Test</h3><h4>Boot Analysis</h4><div class="metric-item single-metric">  <span class="metric-key">Boot Time:</span>  <span class="metric-value">2.9 seconds</span></div><h4>CPU Usage (%)</h4><div class="metric-group"><div class="metric-item">  <span class="metric-key">Average (CPU Usage):</span>  <span class="metric-value">6.20</span></div><div class="metric-item">  <span class="metric-key">Peak (CPU Usage):</span>  <span class="metric-value">8.50</span></div><div class="metric-item">  <span class="metric-key">Min (CPU Usage):</span>  <span class="metric-value">4.80</span></div></div><h4>Memory Footprint (KB)</h4><div class="metric-group"><div class="metric-item">  <span class="metric-key">Average (Memory Footprint):</span>  <span class="metric-value">205.00</span></div><div class="metric-item">  <span class="metric-key">Peak (Memory Footprint):</span>  <span class="metric-value">210.00</span></div><div class="metric-item">  <span class="metric-key">Min (Memory Footprint):</span>  <span class="metric-value">200.00</span></div></div><h4>Power Consumption (mW)</h4><div class="metric-group"><div class="metric-item">  <span class="metric-key">Average (Power Consumption):</span>  <span class="metric-value">15.67</span></div><div class="metric-item">  <span class="metric-key">Peak (Power Consumption):</span>  <span class="metric-value">18.00</span></div><div class="metric-item">  <span class="metric-key">Min (Power Consumption):</span>  <span class="metric-value">14.00</span></div></div><h4>Temperature (C)</h4><div class="metric-group"><div class="metric-item">  <span class="metric-key">Average (Temperature):</span>  <span class="metric-value">36.20</span></div><div class="metric-item">  <span class="metric-key">Peak (Temperature):</span>  <span class="metric-value">37.00</span></div><div class="metric-item">  <span class="metric-key">Min (Temperature):</span>  <span class="metric-value">35.50</span></div></div><h4>Task Latency (us)</h4><div class="metric-group"><div class="metric-item">  <span class="metric-key">Average (Task Latency):</span>  <span class="metric-value">266.67</span></div><div class="metric-item">  <span class="metric-key">Peak (Max) (Task Latency):</span>  <span class="metric-value">400.00</span></div><div class="metric-item">  <span class="metric-key">P95 Latency (Task Latency):</span>  <span class="metric-value">400.00</span></div><div class="metric-item">  <span class="metric-key">Min (Task Latency):</span>  <span class="metric-value">150.00</span></div></div></div><div class="scenario-card"><h3>High Load Test (Robustness Check)</h3><h4>Boot Analysis</h4><div class="metric-item single-metric">  <span class="metric-key">Boot Time:</span>  <span class="metric-value">2.05 seconds</span></div><h4>CPU Usage (%)</h4><div class="metric-group"><div class="metric-item">  <span class="metric-key">Average (CPU Usage):</span>  <span class="metric-value">20.20</span></div><div class="metric-item">  <span class="metric-key">Peak (CPU Usage):</span>  <span class="metric-value">25.50</span></div><div class="metric-item">  <span class="metric-key">Min (CPU Usage):</span>  <span class="metric-value">15.00</span></div></div><h4>Memory Footprint (KB)</h4><div class="metric-group"><div class="metric-item">  <span class="metric-key">Average (Memory Footprint):</span>  <span class="metric-value">365.00</span></div><div class="metric-item">  <span class="metric-key">Peak (Memory Footprint):</span>  <span class="metric-value">380.00</span></div><div class="metric-item">  <span class="metric-key">Min (Memory Footprint):</span>  <span class="metric-value">350.00</span></div></div><h4>Power Consumption (mW)</h4><div class="metric-group"><div class="metric-item">  <span class="metric-key">Average (Power Consumption):</span>  <span class="metric-value">35.00</span></div><div class="metric-item">  <span class="metric-key">Peak (Power Consumption):</span>  <span class="metric-value">35.00</span></div><div class="metric-item">  <span class="metric-key">Min (Power Consumption):</span>  <span class="metric-value">35.00</span></div></div><h4>Temperature (C)</h4><div class="metric-group"><div class="metric-item">  <span class="metric-key">Average (Temperature):</span>  <span class="metric-value">47.50</span></div><div class="metric-item">  <span class="metric-key">Peak (Temperature):</span>  <span class="metric-value">50.00</span></div><div class="metric-item">  <span class="metric-key">Min (Temperature):</span>  <span class="metric-value">45.00</span></div></div><h4>Task Latency (us)</h4><div class="metric-group"><div class="metric-item">  <span class="metric-key">Average (Task Latency):</span>  <span class="metric-value">750.00</span></div><div class="metric-item">  <span class="metric-key">Peak (Max) (Task Latency):</span>  <span class="metric-value">950.00</span></div><div class="metric-item">  <span class="metric-key">P95 Latency (Task Latency):</span>  <span class="metric-value">950.00</span></div><div class="metric-item">  <span class="metric-key">Min (Task Latency):</span>  <span class="metric-value">550.00</span></div></div></div><div class="scenario-card"><h3>Single Data Point Test</h3><h4>Boot Analysis</h4><div class="metric-item single-metric">  <span class="metric-key">Boot Time:</span>  <span class="metric-value">0.5 seconds</span></div><h4>CPU Usage (%)</h4><div class="metric-group"><div class="metric-item">  <span class="metric-key">Average (CPU Usage):</span>  <span class="metric-value">5.00</span></div><div class="metric-item">  <span class="metric-key">Peak (CPU Usage):</span>  <span class="metric-value">5.00</span></div><div class="metric-item">  <span class="metric-key">Min (CPU Usage):</span>  <span class="metric-value">5.00</span></div></div><h4>Temperature (C)</h4><div class="metric-group"><div class="metric-item">  <span class="metric-key">Average (Temperature):</span>  <span class="metric-value">30.00</span></div><div class="metric-item">  <span class="metric-key">Peak (Temperature):</span>  <span class="metric-value">30.00</span></div><div class="metric-item">  <span class="metric-key">Min (Temperature):</span>  <span class="metric-value">30.00</span></div></div></div><div class="scenario-card"><h3>Sparse Data Test</h3><h4>Boot Analysis</h4><div class="metric-item single-metric">  <span class="metric-key">Boot Time:</span>  <span class="metric-value">0.9 seconds</span></div><h4>CPU Usage (%)</h4><div class="metric-group"><div class="metric-item">  <span class="metric-key">Average (CPU Usage):</span>  <span class="metric-value">10.50</span></div><div class="metric-item">  <span class="metric-key">Peak (CPU Usage):</span>  <span class="metric-value">10.50</span></div><div class="metric-item">  <span class="metric-key">Min (CPU Usage):</span>  <span class="metric-value">10.50</span></div></div><h4>Memory Footprint (KB)</h4><div class="metric-group"><div class="metric-item">  <span class="metric-key">Average (Memory Footprint):</span>  <span class="metric-value">250.00</span></div><div class="metric-item">  <span class="metric-key">Peak (Memory Footprint):</span>  <span class="metric-value">250.00</span></div><div class="metric-item">  <span class="metric-key">Min (Memory Footprint):</span>  <span class="metric-value">250.00</span></div></div><h4>Temperature (C)</h4><div class="metric-group"><div class="metric-item">  <span class="metric-key">Average (Temperature):</span>  <span class="metric-value">38.00</span></div><div class="metric-item">  <span class="metric-key">Peak (Temperature):</span>  <span class="metric-value">38.00</span></div><div class="metric-item">  <span class="metric-key">Min (Temperature):</span>  <span class="metric-value">38.00</span></div></div></div><div class="scenario-card"><h3>Stress Spike & Recovery Test</h3><h4>Boot Analysis</h4><div class="metric-item single-metric">  <span class="metric-key">Boot Time:</span>  <span class="metric-value">1.4 seconds</span></div><h4>CPU Usage (%)</h4><div class="metric-group"><div class="metric-item">  <span class="metric-key">Average (CPU Usage):</span>  <span class="metric-value">31.50</span></div><div class="metric-item">  <span class="metric-key">Peak (CPU Usage):</span>  <span class="metric-value">55.00</span></div><div class="metric-item">  <span class="metric-key">Min (CPU Usage):</span>  <span class="metric-value">8.00</span></div></div><h4>Power Consumption (mW)</h4><div class="metric-group"><div class="metric-item">  <span class="metric-key">Average (Power Consumption):</span>  <span class="metric-value">50.00</span></div><div class="metric-item">  <span class="metric-key">Peak (Power Consumption):</span>  <span class="metric-value">80.00</span></div><div class="metric-item">  <span class="metric-key">Min (Power Consumption):</span>  <span class="metric-value">20.00</span></div></div><h4>Temperature (C)</h4><div class="metric-group"><div class="metric-item">  <span class="metric-key">Average (Temperature):</span>  <span class="metric-value">62.50</span></div><div class="metric-item">  <span class="metric-key">Peak (Temperature):</span>  <span class="metric-value">85.00</span></div><div class="metric-item">  <span class="metric-key">Min (Temperature):</span>  <span class="metric-value">40.00</span></div></div></div><div class="scenario-card"><h3>Missing Timestamp Robustness Test</h3><h4>Boot Analysis</h4><div class="metric-item single-metric">  <span class="metric-key">Boot Time:</span>  <span class="metric-value">0.95 seconds</span></div><h4>CPU Usage (%)</h4><div class="metric-group"><div class="metric-item">  <span class="metric-key">Average (CPU Usage):</span>  <span class="metric-value">10.00</span></div><div class="metric-item">  <span class="metric-key">Peak (CPU Usage):</span>  <span class="metric-value">10.00</span></div><div class="metric-item">  <span class="metric-key">Min (CPU Usage):</span>  <span class="metric-value">10.00</span></div></div><h4>Memory Footprint (KB)</h4><div class="metric-group"><div class="metric-item">  <span class="metric-key">Average (Memory Footprint):</span>  <span class="metric-value">300.00</span></div><div class="metric-item">  <span class="metric-key">Peak (Memory Footprint):</span>  <span class="metric-value">300.00</span></div><div class="metric-item">  <span class="metric-key">Min (Memory Footprint):</span>  <span class="metric-value">300.00</span></div></div><h4>Power Consumption (mW)</h4><div class="metric-group"><div class="metric-item">  <span class="metric-key">Average (Power Consumption):</span>  <span class="metric-value">30.00</span></div><div class="metric-item">  <span class="metric-key">Peak (Power Consumption):</span>  <span class="metric-value">30.00</span></div><div class="metric-item">  <span class="metric-key">Min (Power Consumption):</span>  <span class="metric-value">30.00</span></div></div><h4>Temperature (C)</h4><div class="metric-group"><div class="metric-item">  <span class="metric-key">Average (Temperature):</span>  <span class="metric-value">42.00</span></div><div class="metric-item">  <span class="metric-key">Peak (Temperature):</span>  <span class="metric-value">42.00</span></div><div class="metric-item">  <span class="metric-key">Min (Temperature):</span>  <span class="metric-value">42.00</span></div></div></div><div class="scenario-card"><h3>Extreme Latency Test (P95 vs Peak)</h3><h4>Boot Analysis</h4><div class="metric-item single-metric">  <span class="metric-key">Boot Time:</span>  <span class="metric-value">14.99 seconds</span></div><h4>Task Latency (us)</h4><div class="metric-group"><div class="metric-item">  <span class="metric-key">Average (Task Latency):</span>  <span class="metric-value">333.33</span></div><div class="metric-item">  <span class="metric-key">Peak (Max) (Task Latency):</span>  <span class="metric-value">5000.00</span></div><div class="metric-item">  <span class="metric-key">P95 Latency (Task Latency):</span>  <span class="metric-value">100.00</span></div><div class="metric-item">  <span class="metric-key">Min (Task Latency):</span>  <span class="metric-value">100.00</span></div></div></div><div class="scenario-card"><h3>Thermal Spike Test</h3><h4>Boot Analysis</h4><div class="metric-item single-metric">  <span class="metric-key">Boot Time:</span>  <span class="metric-value">3.9 seconds</span></div><h4>CPU Usage (%)</h4><div class="metric-group"><div class="metric-item">  <span class="metric-key">Average (CPU Usage):</span>  <span class="metric-value">60.00</span></div><div class="metric-item">  <span class="metric-key">Peak (CPU Usage):</span>  <span class="metric-value">60.00</span></div><div class="metric-item">  <span class="metric-key">Min (CPU Usage):</span>  <span class="metric-value">60.00</span></div></div><h4>Power Consumption (mW)</h4><div class="metric-group"><div class="metric-item">  <span class="metric-key">Average (Power Consumption):</span>  <span class="metric-value">90.00</span></div><div class="metric-item">  <span class="metric-key">Peak (Power Consumption):</span>  <span class="metric-value">90.00</span></div><div class="metric-item">  <span class="metric-key">Min (Power Consumption):</span>  <span class="metric-value">90.00</span></div></div><h4>Temperature (C)</h4><div class="metric-group"><div class="metric-item">  <span class="metric-key">Average (Temperature):</span>  <span class="metric-value">95.00</span></div><div class="metric-item">  <span class="metric-key">Peak (Temperature):</span>  <span class="metric-value">95.00</span></div><div class="metric-item">  <span class="metric-key">Min (Temperature):</span>  <span class="metric-value">95.00</span></div></div></div><div class="scenario-card"><h3>Security Breach Test</h3><h4>Boot Analysis</h4><div class="metric-item single-metric">  <span class="metric-key">Boot Time:</span>  <span class="metric-value">2.4 seconds</span></div><h4>Security Analysis</h4><div class="metric-group"><div class="metric-item">  <span class="metric-key">Failed Auth Attempts:</span>  <span class="metric-value">3</span></div><div class="metric-item">  <span class="metric-key">Security Breach Detections:</span>  <span class="metric-value">1</span></div></div><h4>CPU Usage (%)</h4><div class="metric-group"><div class="metric-item">  <span class="metric-key">Average (CPU Usage):</span>  <span class="metric-value">5.00</span></div><div class="metric-item">  <span class="metric-key">Peak (CPU Usage):</span>  <span class="metric-value">5.00</span></div><div class="metric-item">  <span class="metric-key">Min (CPU Usage):</span>  <span class="metric-value">5.00</span></div></div><h4>Temperature (C)</h4><div class="metric-group"><div class="metric-item">  <span class="metric-key">Average (Temperature):</span>  <span class="metric-value">30.00</span></div><div class="metric-item">  <span class="metric-key">Peak (Temperature):</span>  <span class="metric-value">30.00</span></div><div class="metric-item">  <span class="metric-key">Min (Temperature):</span>  <span class="metric-value">30.00</span></div></div></div><div class="scenario-card"><h3>Boost Cycle Analysis Test</h3><h4>Boot Analysis</h4><div class="metric-item single-metric">  <span class="metric-key">Boot Time:</span>  <span class="metric-value">3.9 seconds</span></div><h4>Performance Mode Analysis</h4><div class="metric-group"><div class="metric-item">  <span class="metric-key">Total Boost Mode Duration:</span>  <span class="metric-value">2.00 seconds</span></div></div><h4>Power Consumption (mW)</h4><div class="metric-group"><div class="metric-item">  <span class="metric-key">Average (Power Consumption):</span>  <span class="metric-value">40.00</span></div><div class="metric-item">  <span class="metric-key">Peak (Power Consumption):</span>  <span class="metric-value">60.00</span></div><div class="metric-item">  <span class="metric-key">Min (Power Consumption):</span>  <span class="metric-value">20.00</span></div></div><h4>Task Latency (us)</h4><div class="metric-group"><div class="metric-item">  <span class="metric-key">Average (Task Latency):</span>  <span class="metric-value">50.00</span></div><div class="metric-item">  <span class="metric-key">Peak (Max) (Task Latency):</span>  <span class="metric-value">50.00</span></div><div class="metric-item">  <span class="metric-key">P95 Latency (Task Latency):</span>  <span class="metric-value">50.00</span></div><div class="metric-item">  <span class="metric-key">Min (Task Latency):</span>  <span class="metric-value">50.00</span></div></div></div><div class="scenario-card"><h3>Secured Boost Activation Test</h3><h4>Boot Analysis</h4><div class="metric-item single-metric">  <span class="metric-key">Boot Time:</span>  <span class="metric-value">3.9 seconds</span></div><h4>Performance Mode Analysis</h4><div class="metric-group"><div class="metric-item">  <span class="metric-key">Total Boost Mode Duration:</span>  <span class="metric-value">1.00 seconds</span></div></div><h4>CPU Usage (%)</h4><div class="metric-group"><div class="metric-item">  <span class="metric-key">Average (CPU Usage):</span>  <span class="metric-value">37.50</span></div><div class="metric-item">  <span class="metric-key">Peak (CPU Usage):</span>  <span class="metric-value">40.00</span></div><div class="metric-item">  <span class="metric-key">Min (CPU Usage):</span>  <span class="metric-value">35.00</span></div></div><h4>Power Consumption (mW)</h4><div class="metric-group"><div class="metric-item">  <span class="metric-key">Average (Power Consumption):</span>  <span class="metric-value">66.67</span></div><div class="metric-item">  <span class="metric-key">Peak (Power Consumption):</span>  <span class="metric-value">90.00</span></div><div class="metric-item">  <span class="metric-key">Min (Power Consumption):</span>  <span class="metric-value">25.00</span></div></div><h4>Temperature (C)</h4><div class="metric-group"><div class="metric-item">  <span class="metric-key">Average (Temperature):</span>  <span class="metric-value">48.33</span></div><div class="metric-item">  <span class="metric-key">Peak (Temperature):</span>  <span class="metric-value">55.00</span></div><div class="metric-item">  <span class="metric-key">Min (Temperature):</span>  <span class="metric-value">40.00</span></div></div><h4>Task Latency (us)</h4><div class="metric-group"><div class="metric-item">  <span class="metric-key">Average (Task Latency):</span>  <span class="metric-value">90.00</span></div><div class="metric-item">  <span class="metric-key">Peak (Max) (Task Latency):</span>  <span class="metric-value">100.00</span></div><div class="metric-item">  <span class="metric-key">P95 Latency (Task Latency):</span>  <span class="metric-value">100.00</span></div><div class="metric-item">  <span class="metric-key">Min (Task Latency):</span>  <span class="metric-value">80.00</span></div></div></div><div class="scenario-card"><h3>Boost Denied (Security Lockout) Test</h3><h4>Boot Analysis</h4><div class="metric-item single-metric">  <span class="metric-key">Boot Time:</span>  <span class="metric-value">2.9 seconds</span></div><h4>Security Analysis</h4><div class="metric-group"><div class="metric-item">  <span class="metric-key">Failed Auth Attempts:</span>  <span class="metric-value">1</span></div><div class="metric-item">  <span class="metric-key">Security Breach Detections:</span>  <span class="metric-value">1</span></div></div><h4>CPU Usage (%)</h4><div class="metric-group"><div class="metric-item">  <span class="metric-key">Average (CPU Usage):</span>  <span class="metric-value">10.00</span></div><div class="metric-item">  <span class="metric-key">Peak (CPU Usage):</span>  <span class="metric-value">10.00</span></div><div class="metric-item">  <span class="metric-key">Min (CPU Usage):</span>  <span class="metric-value">10.00</span></div></div><h4>Power Consumption (mW)</h4><div class="metric-group"><div class="metric-item">  <span class="metric-key">Average (Power Consumption):</span>  <span class="metric-value">21.00</span></div><div class="metric-item">  <span class="metric-key">Peak (Power Consumption):</span>  <span class="metric-value">22.00</span></div><div class="metric-item">  <span class="metric-key">Min (Power Consumption):</span>  <span class="metric-value">20.00</span></div></div><h4>Temperature (C)</h4><div class="metric-group"><div class="metric-item">  <span class="metric-key">Average (Temperature):</span>  <span class="metric-value">35.50</span></div><div class="metric-item">  <span class="metric-key">Peak (Temperature):</span>  <span class="metric-value">36.00</span></div><div class="metric-item">  <span class="metric-key">Min (Temperature):</span>  <span class="metric-value">35.00</span></div></div><h4>Task Latency (us)</h4><div class="metric-group"><div class="metric-item">  <span class="metric-key">Average (Task Latency):</span>  <span class="metric-value">500.00</span></div><div class="metric-item">  <span class="metric-key">Peak (Max) (Task Latency):</span>  <span class="metric-value">500.00</span></div><div class="metric-item">  <span class="metric-key">P95 Latency (Task Latency):</span>  <span class="metric-value">500.00</span></div><div class="metric-item">  <span class="metric-key">Min (Task Latency):</span>  <span class="metric-value">500.00</span></div></div></div><div class="scenario-card"><h3>Zero Log Data Test (Robustness Check)</h3><h4>Boot Analysis</h4><div class="metric-item single-metric">  <span class="metric-key">Boot Time:</span>  <span class="metric-value">N/A (Could not find valid start and ready markers) seconds</span></div></div><div class="scenario-card"><h3>Mode Oscillation Stress Test</h3><h4>Boot Analysis</h4><div class="metric-item single-metric">  <span class="metric-key">Boot Time:</span>  <span class="metric-value">1.4 seconds</span></div><h4>Performance Mode Analysis</h4><div class="metric-group"><div class="metric-item">  <span class="metric-key">Total Boost Mode Duration:</span>  <span class="metric-value">0.60 seconds</span></div></div><h4>Power Consumption (mW)</h4><div class="metric-group"><div class="metric-item">  <span class="metric-key">Average (Power Consumption):</span>  <span class="metric-value">51.25</span></div><div class="metric-item">  <span class="metric-key">Peak (Power Consumption):</span>  <span class="metric-value">80.00</span></div><div class="metric-item">  <span class="metric-key">Min (Power Consumption):</span>  <span class="metric-value">20.00</span></div></div><h4>Task Latency (us)</h4><div class="metric-group"><div class="metric-item">  <span class="metric-key">Average (Task Latency):</span>  <span class="metric-value">250.00</span></div><div class="metric-item">  <span class="metric-key">Peak (Max) (Task Latency):</span>  <span class="metric-value">500.00</span></div><div class="metric-item">  <span class="metric-key">P95 Latency (Task Latency):</span>  <span class="metric-value">500.00</span></div><div class="metric-item">  <span class="metric-key">Min (Task Latency):</span>  <span class="metric-value">100.00</span></div></div></div><div class="scenario-card"><h3>Power Dip/Intermittent Logging Test</h3><h4>Boot Analysis</h4><div class="metric-item single-metric">  <span class="metric-key">Boot Time:</span>  <span class="metric-value">7.4 seconds</span></div><h4>CPU Usage (%)</h4><div class="metric-group"><div class="metric-item">  <span class="metric-key">Average (CPU Usage):</span>  <span class="metric-value">8.88</span></div><div class="metric-item">  <span class="metric-key">Peak (CPU Usage):</span>  <span class="metric-value">15.00</span></div><div class="metric-item">  <span class="metric-key">Min (CPU Usage):</span>  <span class="metric-value">5.00</span></div></div><h4>Power Consumption (mW)</h4><div class="metric-group"><div class="metric-item">  <span class="metric-key">Average (Power Consumption):</span>  <span class="metric-value">21.00</span></div><div class="metric-item">  <span class="metric-key">Peak (Power Consumption):</span>  <span class="metric-value">25.00</span></div><div class="metric-item">  <span class="metric-key">Min (Power Consumption):</span>  <span class="metric-value">18.00</span></div></div><h4>Temperature (C)</h4><div class="metric-group"><div class="metric-item">  <span class="metric-key">Average (Temperature):</span>  <span class="metric-value">36.50</span></div><div class="metric-item">  <span class="metric-key">Peak (Temperature):</span>  <span class="metric-value">38.00</span></div><div class="metric-item">  <span class="metric-key">Min (Temperature):</span>  <span class="metric-value">35.00</span></div></div><h4>Task Latency (us)</h4><div class="metric-group"><div class="metric-item">  <span class="metric-key">Average (Task Latency):</span>  <span class="metric-value">250.00</span></div><div class="metric-item">  <span class="metric-key">Peak (Max) (Task Latency):</span>  <span class="metric-value">400.00</span></div><div class="metric-item">  <span class="metric-key">P95 Latency (Task Latency):</span>  <span class="metric-value">400.00</span></div><div class="metric-item">  <span class="metric-key">Min (Task Latency):</span>  <span class="metric-value">100.00</span></div></div></div><div class="scenario-card"><h3>Resource Contention Test (Max Load)</h3><h4>Boot Analysis</h4><div class="metric-item single-metric">  <span class="metric-key">Boot Time:</span>  <span class="metric-value">1.4 seconds</span></div><h4>Performance Mode Analysis</h4><div class="metric-group"><div class="metric-item">  <span class="metric-key">Total Boost Mode Duration:</span>  <span class="metric-value">0.01 seconds</span></div></div><h4>CPU Usage (%)</h4><div class="metric-group"><div class="metric-item">  <span class="metric-key">Average (CPU Usage):</span>  <span class="metric-value">50.75</span></div><div class="metric-item">  <span class="metric-key">Peak (CPU Usage):</span>  <span class="metric-value">95.00</span></div><div class="metric-item">  <span class="metric-key">Min (CPU Usage):</span>  <span class="metric-value">8.00</span></div></div><h4>Memory Footprint (KB)</h4><div class="metric-group"><div class="metric-item">  <span class="metric-key">Average (Memory Footprint):</span>  <span class="metric-value">625.00</span></div><div class="metric-item">  <span class="metric-key">Peak (Memory Footprint):</span>  <span class="metric-value">950.00</span></div><div class="metric-item">  <span class="metric-key">Min (Memory Footprint):</span>  <span class="metric-value">300.00</span></div></div><h4>Power Consumption (mW)</h4><div class="metric-group"><div class="metric-item">  <span class="metric-key">Average (Power Consumption):</span>  <span class="metric-value">65.00</span></div><div class="metric-item">  <span class="metric-key">Peak (Power Consumption):</span>  <span class="metric-value">150.00</span></div><div class="metric-item">  <span class="metric-key">Min (Power Consumption):</span>  <span class="metric-value">20.00</span></div></div><h4>Temperature (C)</h4><div class="metric-group"><div class="metric-item">  <span class="metric-key">Average (Temperature):</span>  <span class="metric-value">60.67</span></div><div class="metric-item">  <span class="metric-key">Peak (Temperature):</span>  <span class="metric-value">99.00</span></div><div class="metric-item">  <span class="metric-key">Min (Temperature):</span>  <span class="metric-value">38.00</span></div></div><h4>Task Latency (us)</h4><div class="metric-group"><div class="metric-item">  <span class="metric-key">Average (Task Latency):</span>  <span class="metric-value">7500.00</span></div><div class="metric-item">  <span class="metric-key">Peak (Max) (Task Latency):</span>  <span class="metric-value">7500.00</span></div><div class="metric-item">  <span class="metric-key">P95 Latency (Task Latency):</span>  <span class="metric-value">7500.00</span></div><div class="metric-item">  <span class="metric-key">Min (Task Latency):</span>  <span class="metric-value">7500.00</span></div></div></div>
+        </div>
+        
+        <!-- Final Summary Card (contains the test-result-grid) -->
+        <div class="summary-card full-span"><h2>Final Test Summary</h2><div class="summary-item"><span class="summary-key">Total Tests Executed:</span><span class="summary-value">17</span></div><div class="summary-item"><span class="summary-key">Tests Passed:</span><span class="summary-value">17</span></div><div class="summary-item"><span class="summary-key">Tests Failed:</span><span class="summary-value">0</span></div><div class="summary-item"><span class="summary-key">Total Execution Time:</span><span class="summary-value time">0.0114 seconds</span></div><h4>Individual Test Status:</h4><div class="test-result-grid"><div class="test-result pass"><span class="test-name">Low Load Test</span><span class="test-status">PASS</span></div><div class="test-result pass"><span class="test-name">High Load Test (Robustness Check)</span><span class="test-status">PASS</span></div><div class="test-result pass"><span class="test-name">Single Data Point Test</span><span class="test-status">PASS</span></div><div class="test-result pass"><span class="test-name">Sparse Data Test</span><span class="test-status">PASS</span></div><div class="test-result pass"><span class="test-name">Stress Spike & Recovery Test</span><span class="test-status">PASS</span></div><div class="test-result pass"><span class="test-name">Missing Timestamp Robustness Test</span><span class="test-status">PASS</span></div><div class="test-result pass"><span class="test-name">Extreme Latency Test (P95 vs Peak)</span><span class="test-status">PASS</span></div><div class="test-result pass"><span class="test-name">Thermal Spike Test</span><span class="test-status">PASS</span></div><div class="test-result pass"><span class="test-name">Security Breach Test</span><span class="test-status">PASS</span></div><div class="test-result pass"><span class="test-name">Boost Cycle Analysis Test</span><span class="test-status">PASS</span></div><div class="test-result pass"><span class="test-name">Secured Boost Activation Test</span><span class="test-status">PASS</span></div><div class="test-result pass"><span class="test-name">Boost Denied (Security Lockout) Test</span><span class="test-status">PASS</span></div><div class="test-result pass"><span class="test-name">Zero Log Data Test (Robustness Check)</span><span class="test-status">PASS</span></div><div class="test-result pass"><span class="test-name">Mode Oscillation Stress Test</span><span class="test-status">PASS</span></div><div class="test-result pass"><span class="test-name">Power Dip/Intermittent Logging Test</span><span class="test-status">PASS</span></div><div class="test-result pass"><span class="test-name">Resource Contention Test (Max Load)</span><span class="test-status">PASS</span></div><div class="test-result pass"><span class="test-name">Invalid Data Type Test (Robustness Check)</span><span class="test-status">PASS (Caught expected error)</span></div></div></div>
+        
+    </div>
+</body>
+</html>

@@ -1,0 +1,444 @@
+
+============================================================
+Author: Bang Thien Nguyen ontario1998@gmail.com
+============================================================
+
+Simulating data collection from firmware logs...
+
+============================================================
+Firmware Performance Analysis Report: Low Load Test
+============================================================
+BOOT_TIME_METRIC|Boot Time|2.9 seconds
+------------------------------------------------------------
+
+--- CPU Usage (%) ---
+DETAIL_METRIC|Average (CPU Usage)|6.20
+DETAIL_METRIC|Peak (CPU Usage)|8.50
+DETAIL_METRIC|Min (CPU Usage)|4.80
+
+--- Memory Footprint (KB) ---
+DETAIL_METRIC|Average (Memory Footprint)|205.00
+DETAIL_METRIC|Peak (Memory Footprint)|210.00
+DETAIL_METRIC|Min (Memory Footprint)|200.00
+
+--- Power Consumption (mW) ---
+DETAIL_METRIC|Average (Power Consumption)|15.67
+DETAIL_METRIC|Peak (Power Consumption)|18.00
+DETAIL_METRIC|Min (Power Consumption)|14.00
+
+--- Temperature (C) ---
+DETAIL_METRIC|Average (Temperature)|36.20
+DETAIL_METRIC|Peak (Temperature)|37.00
+DETAIL_METRIC|Min (Temperature)|35.50
+
+--- Task Latency (us) ---
+DETAIL_METRIC|Average (Task Latency)|266.67
+DETAIL_METRIC|Peak (Max) (Task Latency)|400.00
+DETAIL_METRIC|P95 Latency (Task Latency)|400.00
+DETAIL_METRIC|Min (Task Latency)|150.00
+
+------------------------------------------------------------
+
+============================================================
+Firmware Performance Analysis Report: High Load Test (Robustness Check)
+============================================================
+BOOT_TIME_METRIC|Boot Time|2.05 seconds
+------------------------------------------------------------
+
+--- CPU Usage (%) ---
+DETAIL_METRIC|Average (CPU Usage)|20.20
+DETAIL_METRIC|Peak (CPU Usage)|25.50
+DETAIL_METRIC|Min (CPU Usage)|15.00
+
+--- Memory Footprint (KB) ---
+DETAIL_METRIC|Average (Memory Footprint)|365.00
+DETAIL_METRIC|Peak (Memory Footprint)|380.00
+DETAIL_METRIC|Min (Memory Footprint)|350.00
+
+--- Power Consumption (mW) ---
+DETAIL_METRIC|Average (Power Consumption)|35.00
+DETAIL_METRIC|Peak (Power Consumption)|35.00
+DETAIL_METRIC|Min (Power Consumption)|35.00
+
+--- Temperature (C) ---
+DETAIL_METRIC|Average (Temperature)|47.50
+DETAIL_METRIC|Peak (Temperature)|50.00
+DETAIL_METRIC|Min (Temperature)|45.00
+
+--- Task Latency (us) ---
+DETAIL_METRIC|Average (Task Latency)|750.00
+DETAIL_METRIC|Peak (Max) (Task Latency)|950.00
+DETAIL_METRIC|P95 Latency (Task Latency)|950.00
+DETAIL_METRIC|Min (Task Latency)|550.00
+
+------------------------------------------------------------
+
+============================================================
+Firmware Performance Analysis Report: Single Data Point Test
+============================================================
+BOOT_TIME_METRIC|Boot Time|0.5 seconds
+------------------------------------------------------------
+
+--- CPU Usage (%) ---
+DETAIL_METRIC|Average (CPU Usage)|5.00
+DETAIL_METRIC|Peak (CPU Usage)|5.00
+DETAIL_METRIC|Min (CPU Usage)|5.00
+
+--- Temperature (C) ---
+DETAIL_METRIC|Average (Temperature)|30.00
+DETAIL_METRIC|Peak (Temperature)|30.00
+DETAIL_METRIC|Min (Temperature)|30.00
+
+------------------------------------------------------------
+
+============================================================
+Firmware Performance Analysis Report: Sparse Data Test
+============================================================
+BOOT_TIME_METRIC|Boot Time|0.9 seconds
+------------------------------------------------------------
+
+--- CPU Usage (%) ---
+DETAIL_METRIC|Average (CPU Usage)|10.50
+DETAIL_METRIC|Peak (CPU Usage)|10.50
+DETAIL_METRIC|Min (CPU Usage)|10.50
+
+--- Memory Footprint (KB) ---
+DETAIL_METRIC|Average (Memory Footprint)|250.00
+DETAIL_METRIC|Peak (Memory Footprint)|250.00
+DETAIL_METRIC|Min (Memory Footprint)|250.00
+
+--- Temperature (C) ---
+DETAIL_METRIC|Average (Temperature)|38.00
+DETAIL_METRIC|Peak (Temperature)|38.00
+DETAIL_METRIC|Min (Temperature)|38.00
+
+------------------------------------------------------------
+
+============================================================
+Firmware Performance Analysis Report: Stress Spike & Recovery Test
+============================================================
+BOOT_TIME_METRIC|Boot Time|1.4 seconds
+------------------------------------------------------------
+
+--- CPU Usage (%) ---
+DETAIL_METRIC|Average (CPU Usage)|31.50
+DETAIL_METRIC|Peak (CPU Usage)|55.00
+DETAIL_METRIC|Min (CPU Usage)|8.00
+
+--- Power Consumption (mW) ---
+DETAIL_METRIC|Average (Power Consumption)|50.00
+DETAIL_METRIC|Peak (Power Consumption)|80.00
+DETAIL_METRIC|Min (Power Consumption)|20.00
+
+--- Temperature (C) ---
+DETAIL_METRIC|Average (Temperature)|62.50
+DETAIL_METRIC|Peak (Temperature)|85.00
+DETAIL_METRIC|Min (Temperature)|40.00
+
+------------------------------------------------------------
+
+============================================================
+Firmware Performance Analysis Report: Missing Timestamp Robustness Test
+============================================================
+BOOT_TIME_METRIC|Boot Time|0.95 seconds
+------------------------------------------------------------
+
+--- CPU Usage (%) ---
+DETAIL_METRIC|Average (CPU Usage)|10.00
+DETAIL_METRIC|Peak (CPU Usage)|10.00
+DETAIL_METRIC|Min (CPU Usage)|10.00
+
+--- Memory Footprint (KB) ---
+DETAIL_METRIC|Average (Memory Footprint)|300.00
+DETAIL_METRIC|Peak (Memory Footprint)|300.00
+DETAIL_METRIC|Min (Memory Footprint)|300.00
+
+--- Power Consumption (mW) ---
+DETAIL_METRIC|Average (Power Consumption)|30.00
+DETAIL_METRIC|Peak (Power Consumption)|30.00
+DETAIL_METRIC|Min (Power Consumption)|30.00
+
+--- Temperature (C) ---
+DETAIL_METRIC|Average (Temperature)|42.00
+DETAIL_METRIC|Peak (Temperature)|42.00
+DETAIL_METRIC|Min (Temperature)|42.00
+
+------------------------------------------------------------
+
+============================================================
+Firmware Performance Analysis Report: Extreme Latency Test (P95 vs Peak)
+============================================================
+BOOT_TIME_METRIC|Boot Time|14.99 seconds
+------------------------------------------------------------
+
+--- Task Latency (us) ---
+DETAIL_METRIC|Average (Task Latency)|333.33
+DETAIL_METRIC|Peak (Max) (Task Latency)|5000.00
+DETAIL_METRIC|P95 Latency (Task Latency)|100.00
+DETAIL_METRIC|Min (Task Latency)|100.00
+
+------------------------------------------------------------
+
+============================================================
+Firmware Performance Analysis Report: Thermal Spike Test
+============================================================
+BOOT_TIME_METRIC|Boot Time|3.9 seconds
+------------------------------------------------------------
+
+--- CPU Usage (%) ---
+DETAIL_METRIC|Average (CPU Usage)|60.00
+DETAIL_METRIC|Peak (CPU Usage)|60.00
+DETAIL_METRIC|Min (CPU Usage)|60.00
+
+--- Power Consumption (mW) ---
+DETAIL_METRIC|Average (Power Consumption)|90.00
+DETAIL_METRIC|Peak (Power Consumption)|90.00
+DETAIL_METRIC|Min (Power Consumption)|90.00
+
+--- Temperature (C) ---
+DETAIL_METRIC|Average (Temperature)|95.00
+DETAIL_METRIC|Peak (Temperature)|95.00
+DETAIL_METRIC|Min (Temperature)|95.00
+
+------------------------------------------------------------
+
+============================================================
+Firmware Performance Analysis Report: Security Breach Test
+============================================================
+BOOT_TIME_METRIC|Boot Time|2.4 seconds
+------------------------------------------------------------
+
+--- Security Analysis ---
+SECURITY_METRIC|Failed Auth Attempts|3
+SECURITY_METRIC|Security Breach Detections|1
+------------------------------------------------------------
+
+--- CPU Usage (%) ---
+DETAIL_METRIC|Average (CPU Usage)|5.00
+DETAIL_METRIC|Peak (CPU Usage)|5.00
+DETAIL_METRIC|Min (CPU Usage)|5.00
+
+--- Temperature (C) ---
+DETAIL_METRIC|Average (Temperature)|30.00
+DETAIL_METRIC|Peak (Temperature)|30.00
+DETAIL_METRIC|Min (Temperature)|30.00
+
+------------------------------------------------------------
+
+============================================================
+Firmware Performance Analysis Report: Boost Cycle Analysis Test
+============================================================
+BOOT_TIME_METRIC|Boot Time|3.9 seconds
+------------------------------------------------------------
+
+--- Performance Mode Analysis ---
+BOOST_METRIC|Total Boost Mode Duration|2.00 seconds
+------------------------------------------------------------
+
+--- Power Consumption (mW) ---
+DETAIL_METRIC|Average (Power Consumption)|40.00
+DETAIL_METRIC|Peak (Power Consumption)|60.00
+DETAIL_METRIC|Min (Power Consumption)|20.00
+
+--- Task Latency (us) ---
+DETAIL_METRIC|Average (Task Latency)|50.00
+DETAIL_METRIC|Peak (Max) (Task Latency)|50.00
+DETAIL_METRIC|P95 Latency (Task Latency)|50.00
+DETAIL_METRIC|Min (Task Latency)|50.00
+
+------------------------------------------------------------
+
+============================================================
+Firmware Performance Analysis Report: Secured Boost Activation Test
+============================================================
+BOOT_TIME_METRIC|Boot Time|3.9 seconds
+------------------------------------------------------------
+
+--- Performance Mode Analysis ---
+BOOST_METRIC|Total Boost Mode Duration|1.00 seconds
+------------------------------------------------------------
+
+--- CPU Usage (%) ---
+DETAIL_METRIC|Average (CPU Usage)|37.50
+DETAIL_METRIC|Peak (CPU Usage)|40.00
+DETAIL_METRIC|Min (CPU Usage)|35.00
+
+--- Power Consumption (mW) ---
+DETAIL_METRIC|Average (Power Consumption)|66.67
+DETAIL_METRIC|Peak (Power Consumption)|90.00
+DETAIL_METRIC|Min (Power Consumption)|25.00
+
+--- Temperature (C) ---
+DETAIL_METRIC|Average (Temperature)|48.33
+DETAIL_METRIC|Peak (Temperature)|55.00
+DETAIL_METRIC|Min (Temperature)|40.00
+
+--- Task Latency (us) ---
+DETAIL_METRIC|Average (Task Latency)|90.00
+DETAIL_METRIC|Peak (Max) (Task Latency)|100.00
+DETAIL_METRIC|P95 Latency (Task Latency)|100.00
+DETAIL_METRIC|Min (Task Latency)|80.00
+
+------------------------------------------------------------
+
+============================================================
+Firmware Performance Analysis Report: Boost Denied (Security Lockout) Test
+============================================================
+BOOT_TIME_METRIC|Boot Time|2.9 seconds
+------------------------------------------------------------
+
+--- Security Analysis ---
+SECURITY_METRIC|Failed Auth Attempts|1
+SECURITY_METRIC|Security Breach Detections|1
+------------------------------------------------------------
+
+--- CPU Usage (%) ---
+DETAIL_METRIC|Average (CPU Usage)|10.00
+DETAIL_METRIC|Peak (CPU Usage)|10.00
+DETAIL_METRIC|Min (CPU Usage)|10.00
+
+--- Power Consumption (mW) ---
+DETAIL_METRIC|Average (Power Consumption)|21.00
+DETAIL_METRIC|Peak (Power Consumption)|22.00
+DETAIL_METRIC|Min (Power Consumption)|20.00
+
+--- Temperature (C) ---
+DETAIL_METRIC|Average (Temperature)|35.50
+DETAIL_METRIC|Peak (Temperature)|36.00
+DETAIL_METRIC|Min (Temperature)|35.00
+
+--- Task Latency (us) ---
+DETAIL_METRIC|Average (Task Latency)|500.00
+DETAIL_METRIC|Peak (Max) (Task Latency)|500.00
+DETAIL_METRIC|P95 Latency (Task Latency)|500.00
+DETAIL_METRIC|Min (Task Latency)|500.00
+
+------------------------------------------------------------
+
+============================================================
+Firmware Performance Analysis Report: Zero Log Data Test (Robustness Check)
+============================================================
+BOOT_TIME_METRIC|Boot Time|N/A (Could not find valid start and ready markers) seconds
+------------------------------------------------------------
+No valid metrics found for detailed analysis.
+------------------------------------------------------------
+
+============================================================
+Firmware Performance Analysis Report: Mode Oscillation Stress Test
+============================================================
+BOOT_TIME_METRIC|Boot Time|1.4 seconds
+------------------------------------------------------------
+
+--- Performance Mode Analysis ---
+BOOST_METRIC|Total Boost Mode Duration|0.60 seconds
+------------------------------------------------------------
+
+--- Power Consumption (mW) ---
+DETAIL_METRIC|Average (Power Consumption)|51.25
+DETAIL_METRIC|Peak (Power Consumption)|80.00
+DETAIL_METRIC|Min (Power Consumption)|20.00
+
+--- Task Latency (us) ---
+DETAIL_METRIC|Average (Task Latency)|250.00
+DETAIL_METRIC|Peak (Max) (Task Latency)|500.00
+DETAIL_METRIC|P95 Latency (Task Latency)|500.00
+DETAIL_METRIC|Min (Task Latency)|100.00
+
+------------------------------------------------------------
+
+============================================================
+Firmware Performance Analysis Report: Power Dip/Intermittent Logging Test
+============================================================
+BOOT_TIME_METRIC|Boot Time|7.4 seconds
+------------------------------------------------------------
+
+--- CPU Usage (%) ---
+DETAIL_METRIC|Average (CPU Usage)|8.88
+DETAIL_METRIC|Peak (CPU Usage)|15.00
+DETAIL_METRIC|Min (CPU Usage)|5.00
+
+--- Power Consumption (mW) ---
+DETAIL_METRIC|Average (Power Consumption)|21.00
+DETAIL_METRIC|Peak (Power Consumption)|25.00
+DETAIL_METRIC|Min (Power Consumption)|18.00
+
+--- Temperature (C) ---
+DETAIL_METRIC|Average (Temperature)|36.50
+DETAIL_METRIC|Peak (Temperature)|38.00
+DETAIL_METRIC|Min (Temperature)|35.00
+
+--- Task Latency (us) ---
+DETAIL_METRIC|Average (Task Latency)|250.00
+DETAIL_METRIC|Peak (Max) (Task Latency)|400.00
+DETAIL_METRIC|P95 Latency (Task Latency)|400.00
+DETAIL_METRIC|Min (Task Latency)|100.00
+
+------------------------------------------------------------
+
+============================================================
+Firmware Performance Analysis Report: Resource Contention Test (Max Load)
+============================================================
+BOOT_TIME_METRIC|Boot Time|1.4 seconds
+------------------------------------------------------------
+
+--- Performance Mode Analysis ---
+BOOST_METRIC|Total Boost Mode Duration|0.01 seconds
+------------------------------------------------------------
+
+--- CPU Usage (%) ---
+DETAIL_METRIC|Average (CPU Usage)|50.75
+DETAIL_METRIC|Peak (CPU Usage)|95.00
+DETAIL_METRIC|Min (CPU Usage)|8.00
+
+--- Memory Footprint (KB) ---
+DETAIL_METRIC|Average (Memory Footprint)|625.00
+DETAIL_METRIC|Peak (Memory Footprint)|950.00
+DETAIL_METRIC|Min (Memory Footprint)|300.00
+
+--- Power Consumption (mW) ---
+DETAIL_METRIC|Average (Power Consumption)|65.00
+DETAIL_METRIC|Peak (Power Consumption)|150.00
+DETAIL_METRIC|Min (Power Consumption)|20.00
+
+--- Temperature (C) ---
+DETAIL_METRIC|Average (Temperature)|60.67
+DETAIL_METRIC|Peak (Temperature)|99.00
+DETAIL_METRIC|Min (Temperature)|38.00
+
+--- Task Latency (us) ---
+DETAIL_METRIC|Average (Task Latency)|7500.00
+DETAIL_METRIC|Peak (Max) (Task Latency)|7500.00
+DETAIL_METRIC|P95 Latency (Task Latency)|7500.00
+DETAIL_METRIC|Min (Task Latency)|7500.00
+
+------------------------------------------------------------
+
+Simulating analysis with invalid data type for ValueError check...
+| Successfully caught expected Error: Log data must be provided as a list of dictionaries.
+
+============================================================
+                 FINAL TEST SUMMARY REPORT
+------------------------------------------------------------
+| Total Tests Executed: 17
+| Tests Passed:         17
+| Tests Failed:         0
+| Total Execution Time: 0.0115 seconds
+------------------------------------------------------------
+| Low Load Test                            : PASS
+| High Load Test (Robustness Check)        : PASS
+| Single Data Point Test                   : PASS
+| Sparse Data Test                         : PASS
+| Stress Spike & Recovery Test             : PASS
+| Missing Timestamp Robustness Test        : PASS
+| Extreme Latency Test (P95 vs Peak)       : PASS
+| Thermal Spike Test                       : PASS
+| Security Breach Test                     : PASS
+| Boost Cycle Analysis Test                : PASS
+| Secured Boost Activation Test            : PASS
+| Boost Denied (Security Lockout) Test     : PASS
+| Zero Log Data Test (Robustness Check)    : PASS
+| Mode Oscillation Stress Test             : PASS
+| Power Dip/Intermittent Logging Test      : PASS
+| Resource Contention Test (Max Load)      : PASS
+| Invalid Data Type Test (Robustness Check) : PASS (Caught expected error)
+============================================================
