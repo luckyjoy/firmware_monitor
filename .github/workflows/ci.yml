@@ -9,13 +9,11 @@ on:
       - main
   workflow_dispatch:
 
-# CRITICAL: Define workflow-level permissions here. This simplifies the syntax 
-# and provides all necessary access for both Pages and GHCR tasks.
 permissions:
-  contents: write    # For checkout and build metadata/attestations
-  pages: write       # For deploying to GitHub Pages
-  id-token: write    # For authentication with Pages deployment action
-  packages: write    # For pushing Docker images to GHCR (the original fix)
+  contents: write
+  pages: write
+  id-token: write
+  packages: write
 
 jobs:
   build_and_test:
@@ -29,14 +27,19 @@ jobs:
       uses: actions/setup-python@v5
       with:
         python-version: '3.10'
+        # Add caching for pip dependencies to speed up subsequent runs
+        cache: 'pip'
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
 
     - name: Run Analysis Script & Prepare Reports
       id: generate_report
       run: |
-        # 1. Run the script, passing the build number as a positional argument.
         python firmware_monitor.py ${{ github.run_number }}
         
-        # 2. Find the most recently created HTML report. This is robust and avoids timestamp mismatches.
         LATEST_REPORT=$(ls -t reports/*.html | head -n 1)
         if [ -z "$LATEST_REPORT" ]; then
           echo "::error::No report file found!"
@@ -44,39 +47,21 @@ jobs:
         fi
         echo "Found latest report: $LATEST_REPORT"
 
-        # 3. Create the history directory.
         mkdir -p reports/report_history
-        
-        # 4. Copy the latest report to the history folder (its name already includes the build number).
         cp "$LATEST_REPORT" reports/report_history/
-        
-        # 5. Copy the latest report to index.html to serve as the main page.
         cp "$LATEST_REPORT" reports/index.html
         
     - name: Upload Report Artifact
-      # Upload the entire 'reports' directory (containing index.html and report_history/)
       uses: actions/upload-pages-artifact@v3
       with:
         path: 'reports/' 
         
-    # ---------------------------------------------
-    # Docker Image Build/Push for GHCR
-    # ---------------------------------------------
+    # --- Docker Image Build/Push for GHCR (Now using the dedicated Dockerfile) ---
 
     - name: Set up Docker Buildx
       uses: docker/setup-buildx-action@v3
-
-    - name: Build Local Analysis Image Dockerfile
-      run: |
-        cat <<EOF > Dockerfile.ci
-        FROM python:3.10-slim
-        WORKDIR /app
-        COPY firmware_monitor.py .
-        CMD ["python", "firmware_monitor.py"]
-        EOF
         
     - name: Log in to GitHub Container Registry (GHCR)
-      # Only login on main branch push
       if: github.event_name == 'push' && github.ref == 'refs/heads/main'
       uses: docker/login-action@v3
       with:
@@ -85,22 +70,20 @@ jobs:
         password: ${{ secrets.GITHUB_TOKEN }}
 
     - name: Build and push Docker image
-      # Only push on main branch push
       if: github.event_name == 'push' && github.ref == 'refs/heads/main'
       uses: docker/build-push-action@v5
       with:
         context: .
         push: true
-        file: Dockerfile.ci
+        # Use the new, dedicated Dockerfile
+        file: ./Dockerfile
         tags: |
           ghcr.io/${{ github.repository }}:latest
           ghcr.io/${{ github.repository }}:${{ github.sha }}
 
   deploy:
-    # This job handles the Pages deployment in isolation
     needs: build_and_test
     runs-on: ubuntu-latest
-    # Only run on main branch push
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     environment:
       name: github-pages
