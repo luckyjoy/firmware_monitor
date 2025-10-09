@@ -139,14 +139,14 @@ jobs:
         with:
           path: 'reports/' 
           
-      # 6. Update the History Branch with the new combined reports (FIXED ACTION)
+      # 6. Update the History Branch with the new combined reports (FINAL FIX)
       - name: Push Combined History Back to Repository
-        uses: ad-m/github-push-action@master # CORRECTED ACTION
+        uses: ad-m/github-push-action@master
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          directory: reports/report_history # Push the directory content
-          commit_message: "CI: Updated persistent report history for build ${{ github.run_number }}"
+          directory: reports/report_history 
           branch: report_history
+          force: true # CRITICAL: Overwrite remote history to prevent "atomic push failed"
           
       # ---------------------------------------------
       # Docker Image Build/Push for GHCR
