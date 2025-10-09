@@ -32,7 +32,7 @@ jobs:
       with:
         python-version: '3.10'
 
-    - name: Run Analysis Script (${{ matrix.os }})
+    - name: Run Analysis Script & Generate Artifacts (${{ matrix.os }})
       id: generate_report
       shell: bash
       run: |
@@ -40,12 +40,13 @@ jobs:
         OS_SUFFIX=$(echo "${{ matrix.os }}" | tr '[:upper:]' '[:lower:]')
         
         # 1. Run the script with the build number argument
-        python firmware_monitor.py ${{ github.run_number }} --os $OS_SUFFIX
+        python firmware_monitor.py ${{ github.run_number }}
         
         # 2. Rename the generated report to include the OS name
         LATEST_REPORT_PATH=$(ls -t reports/*.html | head -n 1)
         NEW_FILENAME=$(basename "$LATEST_REPORT_PATH" .html)_${OS_SUFFIX}.html
         
+        # Use a temporary name for the final artifact
         mv "$LATEST_REPORT_PATH" "reports/$NEW_FILENAME"
         echo "Found latest report: reports/$NEW_FILENAME"
 
@@ -56,7 +57,6 @@ jobs:
         name: analysis-reports-${{ matrix.os }}
         path: reports/
 
-  ---
   # --- Stage 2: Combine Reports, Build History, Deploy ---
   build_and_deploy:
     # Depends on both matrix jobs completing successfully
