@@ -10,7 +10,7 @@ Features:
 - Metrics evaluation (PASS/FAIL/SKIP) with thresholds
 - Scenario-level status (PASS/FAIL/MIXED/SKIP)
 - Auto-SKIP if metric missing
-- Summary table with PASS percentages
+- Summary table at bottom of HTML
 - Optional build number (CLI input)
 - Reports saved in ./reports/ with local timestamp
 - Author attribution included
@@ -232,21 +232,10 @@ class FirmwarePerformanceAnalyzer:
             lines.append(f"Scenario Status: {result['scenario_status']}")
             lines.append("-"*40)
 
-        # --- Test Suites Summary ---
-        suite_pass, suite_fail, suite_mixed, suite_skip = self._get_suite_summary_counts()
-        total_suites = len(self.results)
-        suite_pass_percent = (suite_pass / total_suites * 100) if total_suites > 0 else 0
-        lines.append("\nSUMMARY (Test Suites)")
-        lines.append(f"Total Test Suites: {total_suites}")
-        lines.append(f"PASS: {suite_pass} ({suite_pass_percent:.2f}%), FAIL: {suite_fail}, MIXED: {suite_mixed}, SKIP: {suite_skip}")
-
-        # --- Individual Tests Summary ---
-        metric_pass, metric_fail, metric_skip = self._get_metric_summary_counts()
-        total_metrics = metric_pass + metric_fail + metric_skip
-        metric_pass_percent = (metric_pass / total_metrics * 100) if total_metrics > 0 else 0
-        lines.append("\nSUMMARY (Individual Tests)")
-        lines.append(f"Total Individual Tests: {total_metrics}")
-        lines.append(f"PASS: {metric_pass} ({metric_pass_percent:.2f}%), FAIL: {metric_fail}, SKIP: {metric_skip}")
+        pass_count, fail_count, mixed_count, skip_count = self._get_summary_counts()
+        lines.append("\nSUMMARY")
+        lines.append(f"Total Test Suites: {len(self.results)}")
+        lines.append(f"PASS: {pass_count}, FAIL: {fail_count}, MIXED: {mixed_count}, SKIP: {skip_count}")
 
         return "\n".join(lines)
 
@@ -275,50 +264,27 @@ class FirmwarePerformanceAnalyzer:
                             <span class="metric-value">Not available → {status_label}</span>
                         </div>
                     """
-            
-            # ** FIX IS HERE **
-            # Pre-calculate complex expressions to simplify the f-string and avoid syntax errors.
-            status_color = STATUS_COLORS.get(result['scenario_status'], '#000')
-            scenario_status_label = render_status_label(result['scenario_status'])
-
             scenario_html += f"""
                 <div class="scenario-card">
                     <h3>{result['scenario']}</h3>
                     <div class="metric-group">
                         {metric_html}
                     </div>
-                    <div class="test-result" style="border-left: 4px solid {status_color}; background:#f9fafb; padding:8px; margin-top:10px;">
-                        Scenario Status: {scenario_status_label}
+                    <div class="test-result" style="border-left: 4px solid {STATUS_COLORS.get(result['scenario_status'], '#000')}; background:#f9fafb; padding:8px; margin-top:10px;">
+                        Scenario Status: {render_status_label(result['scenario_status'])}
                     </div>
                 </div>
             """
 
-        # --- Test Suites Summary HTML ---
-        suite_pass, suite_fail, suite_mixed, suite_skip = self._get_suite_summary_counts()
-        total_suites = len(self.results)
-        suite_pass_percent = (suite_pass / total_suites * 100) if total_suites > 0 else 0
-        suite_summary_html = f"""
+        pass_count, fail_count, mixed_count, skip_count = self._get_summary_counts()
+        summary_html = f"""
             <div class="summary-card">
-                <h2>Overall Summary (Test Suites)</h2>
-                <div class="summary-item"><span class="summary-key">Total Test Suites</span><span class="summary-value">{total_suites}</span></div>
-                <div class="summary-item"><span class="summary-key">PASS</span><span class="summary-value" style="color:{STATUS_COLORS['PASS']};">{suite_pass} ({suite_pass_percent:.2f}%)</span></div>
-                <div class="summary-item"><span class="summary-key">FAIL</span><span class="summary-value" style="color:{STATUS_COLORS['FAIL']};">{suite_fail}</span></div>
-                <div class="summary-item"><span class="summary-key">MIXED</span><span class="summary-value" style="color:{STATUS_COLORS['MIXED']};">{suite_mixed}</span></div>
-                <div class="summary-item"><span class="summary-key">SKIP</span><span class="summary-value" style="color:{STATUS_COLORS['SKIP']};">{suite_skip}</span></div>
-            </div>
-        """
-
-        # --- Individual Tests Summary HTML ---
-        metric_pass, metric_fail, metric_skip = self._get_metric_summary_counts()
-        total_metrics = metric_pass + metric_fail + metric_skip
-        metric_pass_percent = (metric_pass / total_metrics * 100) if total_metrics > 0 else 0
-        metric_summary_html = f"""
-            <div class="summary-card" style="background-color: #e0f2fe; border-color: #7dd3fc; margin-top: 20px;">
-                <h2>Overall Summary (Individual Tests)</h2>
-                <div class="summary-item"><span class="summary-key">Total Individual Tests</span><span class="summary-value">{total_metrics}</span></div>
-                <div class="summary-item"><span class="summary-key">PASS</span><span class="summary-value" style="color:{STATUS_COLORS['PASS']};">{metric_pass} ({metric_pass_percent:.2f}%)</span></div>
-                <div class="summary-item"><span class="summary-key">FAIL</span><span class="summary-value" style="color:{STATUS_COLORS['FAIL']};">{metric_fail}</span></div>
-                <div class="summary-item"><span class="summary-key">SKIP</span><span class="summary-value" style="color:{STATUS_COLORS['SKIP']};">{metric_skip}</span></div>
+                <h2>Overall Summary</h2>
+                <div class="summary-item"><span class="summary-key">Total Test Suites</span><span class="summary-value">{len(self.results)}</span></div>
+                <div class="summary-item"><span class="summary-key">PASS</span><span class="summary-value" style="color:{STATUS_COLORS['PASS']};">{pass_count}</span></div>
+                <div class="summary-item"><span class="summary-key">FAIL</span><span class="summary-value" style="color:{STATUS_COLORS['FAIL']};">{fail_count}</span></div>
+                <div class="summary-item"><span class="summary-key">MIXED</span><span class="summary-value" style="color:{STATUS_COLORS['MIXED']};">{mixed_count}</span></div>
+                <div class="summary-item"><span class="summary-key">SKIP</span><span class="summary-value" style="color:{STATUS_COLORS['SKIP']};">{skip_count}</span></div>
             </div>
         """
 
@@ -358,15 +324,13 @@ class FirmwarePerformanceAnalyzer:
         <div class="report-grid">
             {scenario_html}
         </div>
-        {suite_summary_html}
-        {metric_summary_html}
+        {summary_html}
     </div>
 </body>
 </html>"""
         return html_output
 
-    def _get_suite_summary_counts(self):
-        """Counts the final status for each test suite."""
+    def _get_summary_counts(self):
         pass_count = fail_count = mixed_count = skip_count = 0
         for result in self.results:
             status = result["scenario_status"]
@@ -379,19 +343,6 @@ class FirmwarePerformanceAnalyzer:
             elif status == "SKIP":
                 skip_count += 1
         return pass_count, fail_count, mixed_count, skip_count
-
-    def _get_metric_summary_counts(self):
-        """Counts the status of all individual tests (metrics) across all suites."""
-        pass_count = fail_count = skip_count = 0
-        for result in self.results:
-            for status in result["metric_status"].values():
-                if status == "PASS":
-                    pass_count += 1
-                elif status == "FAIL":
-                    fail_count += 1
-                elif status == "SKIP":
-                    skip_count += 1
-        return pass_count, fail_count, skip_count
 
 
 # -------------------------------------------------------------------
