@@ -1,95 +1,65 @@
-name: Firmware Monitor CI
-
-on:
-  push:
-    branches:
-      - main
-  pull_request:
-    branches:
-      - main
-  workflow_dispatch:
-
-permissions:
-  contents: write
-  pages: write
-  id-token: write
-  packages: write
-
-jobs:
-  build_and_test:
-    runs-on: ubuntu-latest
-    
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-
-    - name: Set up Python
-      uses: actions/setup-python@v5
-      with:
-        python-version: '3.10'
-
-    - name: Run Analysis Script & Prepare Reports
+- name: Run Analysis Script & Prepare Reports
       id: generate_report
       run: |
         # 1. Run the script directly with the build number argument
         python firmware_monitor.py ${{ github.run_number }}
         
         # 2. Find the most recently created HTML report (which includes build# in filename)
-        LATEST_REPORT=$(ls -t reports/*.html | head -n 1)
-        if [ -z "$LATEST_REPORT" ]; then
+        LATEST_REPORT_PATH=$(ls -t reports/*.html | head -n 1)
+        LATEST_REPORT_FILE=$(basename "$LATEST_REPORT_PATH")
+        if [ -z "$LATEST_REPORT_PATH" ]; then
           echo "::error::No report file found!"
           exit 1
         fi
-        echo "Found latest report: $LATEST_REPORT"
+        echo "Found latest report: $LATEST_REPORT_PATH"
 
-        # 3. Create the history folder and copy the report (FIXED: creates report_history folder)
+        # 3. Create the history folder
         mkdir -p reports/report_history
-        cp "$LATEST_REPORT" reports/report_history/
         
-        # 4. Copy the latest report to index.html for the main page (FIXED: appends build# to history, index is clean)
-        cp "$LATEST_REPORT" reports/index.html
+        # 4. Copy the latest report to the history folder (its name already includes the build number)
+        cp "$LATEST_REPORT_PATH" reports/report_history/
         
-    - name: Upload Report Artifact
-      uses: actions/upload-pages-artifact@v3
-      with:
-        path: 'reports/' 
-        
-    # ---------------------------------------------
-    # Docker Image Build/Push for GHCR (Uses new simple Dockerfile)
-    # ---------------------------------------------
+        # 5. Copy the latest report to index.html for the main page
+        cp "$LATEST_REPORT_PATH" reports/index.html
 
-    - name: Set up Docker Buildx
-      uses: docker/setup-buildx-action@v3
+        # 6. Generate the History Index Page (FIXED: Provide a link to report_history at the GitHub page)
+        echo "Generating report_history/index.html"
         
-    - name: Log in to GitHub Container Registry (GHCR)
-      if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-      uses: docker/login-action@v3
-      with:
-        registry: ghcr.io
-        username: ${{ github.actor }}
-        password: ${{ secrets.GITHUB_TOKEN }}
+        # Find all report files in the history directory
+        REPORT_FILES=$(find reports/report_history -maxdepth 1 -type f -name 'firmware_analysis_report_*.html' | sort -r)
+        
+        HISTORY_LINKS=""
+        for file_path in $REPORT_FILES; do
+          filename=$(basename "$file_path")
+          link_name=$(echo "$filename" | sed -E 's/firmware_analysis_report_([0-9]{8})_([0-9]{6})_([0-9]+).html/Report Date: \1 Time: \2 Build: \3/')
+          HISTORY_LINKS+="<li><a href=\"$filename\">$link_name</a></li>"
+        done
 
-    - name: Build and push Docker image
-      if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-      uses: docker/build-push-action@v5
-      with:
-        context: .
-        push: true
-        # This will use the new, simple Dockerfile
-        file: ./Dockerfile 
-        tags: |
-          ghcr.io/${{ github.repository }}:latest
-          ghcr.io/${{ github.repository }}:${{ github.sha }}
-
-  deploy:
-    needs: build_and_test
-    runs-on: ubuntu-latest
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    
-    steps:
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4
+        # Write the HTML file
+        cat <<EOF > reports/report_history/index.html
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Report History</title>
+    <style>
+        body { font-family: sans-serif; padding: 20px; background-color: #f8f8f8; }
+        h1 { color: #1d4ed8; }
+        .back-link { 
+            display: inline-block; margin-bottom: 20px; padding: 10px 15px; background-color: #dbeafe; 
+            border-radius: 6px; text-decoration: none; color: #1d4ed8; font-weight: 600;
+        }
+        ul { list-style: none; padding: 0; }
+        li { margin-bottom: 10px; padding: 10px; border: 1px solid #ccc; border-radius: 4px; background-color: #fff; }
+        li a { text-decoration: none; color: #059669; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <a href="../index.html" class="back-link">← Back to Latest Report</a>
+    <h1>Archived Report History</h1>
+    <ul>
+        $HISTORY_LINKS
+    </ul>
+    <p>All reports are archived here: luckyjoy.github.io/firmware_monitor/report_history/</p>
+</body>
+</html>
+EOF

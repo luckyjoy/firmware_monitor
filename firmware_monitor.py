@@ -19,7 +19,6 @@ Features:
 import os
 import sys
 import datetime
-#import pytz
 
 
 # -------------------------------------------------------------------
@@ -189,37 +188,13 @@ class FirmwarePerformanceAnalyzer:
                 "metric_status": metrics_status,
                 "scenario_status": scenario_status
             })
-            
+
     def generate_reports(self):
         report_dir = os.path.join(os.getcwd(), "reports")
         os.makedirs(report_dir, exist_ok=True)
 
-        # local_tz = pytz.timezone('America/Los_Angeles') <-- REMOVED THIS LINE
-        # timestamp = datetime.datetime.now(local_tz).strftime("%Y%m%d_%H%M%S") <-- MODIFIED
-        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S") # Uses standard local time
-        
-        base_filename = f"firmware_analysis_report_{timestamp}"
-        if self.build_number != "NA":
-            base_filename += f"_{self.build_number}"
-
-        txt_path = os.path.join(report_dir, base_filename + ".txt")
-        html_path = os.path.join(report_dir, base_filename + ".html")
-
-        with open(txt_path, "w", encoding="utf-8") as f:
-            f.write(self.generate_text_report(timestamp))
-
-        with open(html_path, "w", encoding="utf-8") as f:
-            f.write(self.generate_html_report(timestamp))
-
-        print(f"Reports generated:\n- {txt_path}\n- {html_path}")
-        
-    '''
-    def generate_reports(self):
-        report_dir = os.path.join(os.getcwd(), "reports")
-        os.makedirs(report_dir, exist_ok=True)
-
-        local_tz = pytz.timezone('America/Los_Angeles')
-        timestamp = datetime.datetime.now(local_tz).strftime("%Y%m%d_%H%M%S")
+        # FIX: Removed pytz dependency, using standard local time
+        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
 
         base_filename = f"firmware_analysis_report_{timestamp}"
         if self.build_number != "NA":
@@ -235,8 +210,6 @@ class FirmwarePerformanceAnalyzer:
             f.write(self.generate_html_report(timestamp))
 
         print(f"Reports generated:\n- {txt_path}\n- {html_path}")
-        
-    '''
 
     def generate_text_report(self, timestamp):
         lines = []
@@ -279,6 +252,15 @@ class FirmwarePerformanceAnalyzer:
     def generate_html_report(self, timestamp):
         author_line = f"<div class='author-info'>Author: Bang Thien Nguyen &lt;ontario1998@gmail.com&gt;</div>"
         build_line = f"<div class='author-info'>Build Number: {self.build_number} | Test Run Timestamp: {timestamp}</div>"
+        
+        # --- FIX: ADDED NAVIGATION BAR FOR HISTORY LINK ---
+        nav_bar = """
+            <div class="nav-bar">
+                <a href="index.html" class="nav-link">Latest Report</a>
+                <a href="report_history/index.html" class="nav-link nav-link-history">Report History</a>
+            </div>
+        """
+        # ------------------------------------------------
 
         scenario_html = ""
         for result in self.results:
@@ -302,7 +284,6 @@ class FirmwarePerformanceAnalyzer:
                         </div>
                     """
             
-            # Pre-calculate complex expressions to simplify the f-string and avoid syntax errors.
             status_color = STATUS_COLORS.get(result['scenario_status'], '#000')
             scenario_status_label = render_status_label(result['scenario_status'])
 
@@ -358,6 +339,33 @@ class FirmwarePerformanceAnalyzer:
         .container {{ max-width: 1200px; margin: 0 auto; background-color: #ffffff; padding: 20px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); border-radius: 12px; }}
         h1 {{ color: #1d4ed8; border-bottom: 3px solid #bfdbfe; padding-bottom: 10px; margin-bottom: 20px; font-size: 2em; }}
         .author-info {{ color: #4b5563; font-size: 0.9em; margin-bottom: 5px; }}
+        
+        /* --- NEW NAVIGATION STYLES --- */
+        .nav-bar {{
+            display: flex;
+            justify-content: flex-start;
+            margin-bottom: 20px;
+            border-bottom: 1px solid #d1d5db;
+            padding-bottom: 10px;
+        }}
+        .nav-link {{
+            text-decoration: none;
+            color: #1d4ed8;
+            font-weight: 600;
+            padding: 5px 15px;
+            margin-right: 10px;
+            border: 1px solid #bfdbfe;
+            border-radius: 6px;
+            transition: background-color 0.2s;
+        }}
+        .nav-link:hover {{
+            background-color: #eff6ff;
+        }}
+        .nav-link-history {{
+            background-color: #dbeafe; /* Highlight the history link */
+        }}
+        /* --- END NEW NAVIGATION STYLES --- */
+        
         .report-grid {{ display: grid; grid-template-columns: 1fr; gap: 20px; margin-top: 15px; }}
         @media (min-width: 768px) {{ .report-grid {{ grid-template-columns: 1fr 1fr; }} }}
         .scenario-card {{ background-color: #f9fafb; border: 1px solid #e5e7eb; padding: 15px; margin-bottom: 0; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }}
@@ -378,6 +386,7 @@ class FirmwarePerformanceAnalyzer:
 <body>
     <div class="container">
         <h1>Firmware Performance Analysis Comprehensive Report</h1>
+        {nav_bar}
         {author_line}
         {build_line}
         <div class="report-grid">
