@@ -1,4 +1,12 @@
-- name: Run Analysis Script & Prepare Reports
+name: Firmware Monitor CI
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
       id: generate_report
       run: |
         # 1. Run the script directly with the build number argument
