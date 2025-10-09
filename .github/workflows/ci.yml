@@ -34,60 +34,41 @@ jobs:
 
     - name: Run Analysis Script & Prepare Reports (${{ matrix.os }})
       id: generate_report
-      # This step uses conditional logic to switch between Bash (Linux) and PowerShell (Windows) commands
-      # The output is placed in the 'reports' directory regardless of OS.
+      # CRITICAL FIX: Run the file manipulation using the Bash shell for both OSes.
+      # This ensures cross-compatibility for 'ls -t', 'mkdir -p', 'cp', and 'sed'.
+      shell: bash
       run: |
         # 1. Run the script with the build number argument
         python firmware_monitor.py ${{ github.run_number }}
         
-        # Determine shell based on OS for file operations
-        if [ "${{ runner.os }}" == "Windows" ]; then
-          $shell = "powershell"
-          $ReportFilesCmd = "Get-ChildItem -Path reports/report_history -Filter 'firmware_analysis_report_*.html' | Sort-Object Name -Descending"
-          
-          # Find the most recently created HTML report
-          $LatestReportPath = (Get-ChildItem -Path reports/*.html | Sort-Object LastWriteTime -Descending | Select-Object -First 1).FullName
-          Write-Host "Found latest report: $LatestReportPath"
-
-          # Create directory and copy files
-          mkdir reports/report_history
-          Copy-Item $LatestReportPath -Destination reports/report_history/
-          Copy-Item $LatestReportPath -Destination reports/index.html
-          
-          # Generate History Index Page (PowerShell)
-          $HISTORY_LINKS = ""
-          foreach ($File in Invoke-Expression $ReportFilesCmd) {
-              $FileName = $File.Name
-              $LinkName = $FileName -replace "firmware_analysis_report_(\d{8})_(\d{6})_(\d+).html", "Report Date: `$1 Time: `$2 Build: `$3"
-              $HISTORY_LINKS += "<li><a href=`"$FileName`">$LinkName</a></li>`n"
-          }
-
-          # Read template and write content
-          (Get-Content history_template.html -Raw) -replace '\$HISTORY_LINKS', $HISTORY_LINKS | Out-File reports/report_history/index.html -Encoding UTF8
+        # 2. Find the most recently created HTML report
+        # Note: 'ls -t' works correctly on both Ubuntu and Windows runners when using 'shell: bash'
+        LATEST_REPORT_PATH=$(ls -t reports/*.html | head -n 1)
         
-        else # Linux (Ubuntu)
-          $shell = "bash"
-          
-          # Find the most recently created HTML report
-          LATEST_REPORT_PATH=$(ls -t reports/*.html | head -n 1)
-          echo "Found latest report: $LATEST_REPORT_PATH"
-
-          # Create directory and copy files
-          mkdir -p reports/report_history
-          cp "$LATEST_REPORT_PATH" reports/report_history/
-          cp "$LATEST_REPORT_PATH" reports/index.html
-
-          # Generate History Index Page (Bash/Sed)
-          REPORT_FILES=$(find reports/report_history -maxdepth 1 -type f -name 'firmware_analysis_report_*.html' | sort -r)
-          HISTORY_LINKS=""
-          for file_path in $REPORT_FILES; do
-            filename=$(basename "$file_path")
-            link_name=$(echo "$filename" | sed -E 's/firmware_analysis_report_([0-9]{8})_([0-9]{6})_([0-9]+).html/Report Date: \1 Time: \2 Build: \3/')
-            HISTORY_LINKS+="<li><a href=\"$filename\">$link_name</a></li>"
-          done
-          
-          cat history_template.html | sed "s|\$HISTORY_LINKS|$HISTORY_LINKS|g" > reports/report_history/index.html
+        if [ -z "$LATEST_REPORT_PATH" ]; then
+          echo "::error::No report file found!"
+          exit 1
         fi
+        echo "Found latest report: $LATEST_REPORT_PATH"
+
+        # 3. Create directory and copy files
+        mkdir -p reports/report_history
+        cp "$LATEST_REPORT_PATH" reports/report_history/
+        cp "$LATEST_REPORT_PATH" reports/index.html
+
+        # 4. Generate History Index Page
+        REPORT_FILES=$(find reports/report_history -maxdepth 1 -type f -name 'firmware_analysis_report_*.html' | sort -r)
+        
+        HISTORY_LINKS=""
+        for file_path in $REPORT_FILES; do
+          filename=$(basename "$file_path")
+          link_name=$(echo "$filename" | sed -E 's/firmware_analysis_report_([0-9]{8})_([0-9]{6})_([0-9]+).html/Report Date: \1 Time: \2 Build: \3/')
+          HISTORY_LINKS+="<li><a href=\"$filename\">$link_name</a></li>"
+        done
+        
+        # Use the template file and substitute the links variable
+        # Note: 'sed' command works correctly on both OSes when using 'shell: bash'
+        cat history_template.html | sed "s|\$HISTORY_LINKS|$HISTORY_LINKS|g" > reports/report_history/index.html
 
     # Only upload artifacts once, using the successful Ubuntu run's output for deployment
     - name: Upload Report Artifact
