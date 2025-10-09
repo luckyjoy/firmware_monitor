@@ -19,7 +19,7 @@ Features:
 import os
 import sys
 import datetime
-import pytz
+#import pytz
 
 
 # -------------------------------------------------------------------
@@ -189,7 +189,31 @@ class FirmwarePerformanceAnalyzer:
                 "metric_status": metrics_status,
                 "scenario_status": scenario_status
             })
+            
+    def generate_reports(self):
+        report_dir = os.path.join(os.getcwd(), "reports")
+        os.makedirs(report_dir, exist_ok=True)
 
+        # local_tz = pytz.timezone('America/Los_Angeles') <-- REMOVED THIS LINE
+        # timestamp = datetime.datetime.now(local_tz).strftime("%Y%m%d_%H%M%S") <-- MODIFIED
+        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S") # Uses standard local time
+        
+        base_filename = f"firmware_analysis_report_{timestamp}"
+        if self.build_number != "NA":
+            base_filename += f"_{self.build_number}"
+
+        txt_path = os.path.join(report_dir, base_filename + ".txt")
+        html_path = os.path.join(report_dir, base_filename + ".html")
+
+        with open(txt_path, "w", encoding="utf-8") as f:
+            f.write(self.generate_text_report(timestamp))
+
+        with open(html_path, "w", encoding="utf-8") as f:
+            f.write(self.generate_html_report(timestamp))
+
+        print(f"Reports generated:\n- {txt_path}\n- {html_path}")
+        
+    '''
     def generate_reports(self):
         report_dir = os.path.join(os.getcwd(), "reports")
         os.makedirs(report_dir, exist_ok=True)
@@ -211,6 +235,8 @@ class FirmwarePerformanceAnalyzer:
             f.write(self.generate_html_report(timestamp))
 
         print(f"Reports generated:\n- {txt_path}\n- {html_path}")
+        
+    '''
 
     def generate_text_report(self, timestamp):
         lines = []
