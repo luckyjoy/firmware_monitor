@@ -50,7 +50,7 @@ jobs:
         # 4. Copy the latest report to index.html for the main page
         cp "$LATEST_REPORT_PATH" reports/index.html
 
-        # 5. Generate the History Index Page (FIXED: The multi-line string is correctly terminated)
+        # 5. Generate the History Index Page 
         echo "Generating report_history/index.html"
         
         # Find all report files in the history directory
@@ -63,7 +63,7 @@ jobs:
           HISTORY_LINKS+="<li><a href=\"$filename\">$link_name</a></li>"
         done
 
-        # Write the HTML file (EOF MUST be at the beginning of the line)
+        # Write the HTML file
         cat <<EOF > reports/report_history/index.html
 <!DOCTYPE html>
 <html>
@@ -90,7 +90,7 @@ jobs:
     <p>All reports are archived here: luckyjoy.github.io/firmware_monitor/report_history/</p>
 </body>
 </html>
-EOF
+EOF # <--- THIS LINE MUST BE THE FINAL LINE OF THE SCRIPT BLOCK, WITH NO LEADING SPACES (Line 68)
         
     - name: Upload Report Artifact
       uses: actions/upload-pages-artifact@v3
