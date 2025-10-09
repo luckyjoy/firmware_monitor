@@ -1,63 +1,4 @@
-name: Firmware Monitor CI
-
-on:
-  push:
-    branches:
-      - main
-  pull_request:
-    branches:
-      - main
-  workflow_dispatch:
-
-permissions:
-  contents: write
-  pages: write
-  id-token: write
-  packages: write
-
-jobs:
-  # --- Stage 1: Run Tests on Matrix and Generate Reports ---
-  test_and_prepare:
-    runs-on: ${{ matrix.os }}
-    strategy:
-      matrix:
-        os: [ubuntu-latest, windows-latest]
-        
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-
-    - name: Set up Python
-      uses: actions/setup-python@v5
-      with:
-        python-version: '3.10'
-
-    - name: Run Analysis Script & Generate Artifacts (${{ matrix.os }})
-      id: generate_report
-      shell: bash
-      run: |
-        # Use OS name in the output filename to prevent overwriting
-        OS_SUFFIX=$(echo "${{ matrix.os }}" | tr '[:upper:]' '[:lower:]')
-        
-        # 1. Run the script with the build number argument
-        python firmware_monitor.py ${{ github.run_number }}
-        
-        # 2. Rename the generated report to include the OS name
-        LATEST_REPORT_PATH=$(ls -t reports/*.html | head -n 1)
-        NEW_FILENAME=$(basename "$LATEST_REPORT_PATH" .html)_${OS_SUFFIX}.html
-        
-        # Use a temporary name for the final artifact
-        mv "$LATEST_REPORT_PATH" "reports/$NEW_FILENAME"
-        echo "Found latest report: reports/$NEW_FILENAME"
-
-    # CRITICAL: Upload the entire 'reports' folder as an artifact for the next job to process
-    - name: Upload Analysis Reports Artifact
-      uses: actions/upload-artifact@v4
-      with:
-        name: analysis-reports-${{ matrix.os }}
-        path: reports/
-
-  # --- Stage 2: Combine Reports, Build History, Deploy ---
+# --- Stage 2: Combine Reports, Build History, Deploy ---
   build_and_deploy:
     # Depends on both matrix jobs completing successfully
     needs: test_and_prepare
@@ -71,7 +12,11 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
         
-      # CRITICAL: Download all artifacts from the matrix runs
+      # CRITICAL FIX: Ensure the reports directory is ready
+      - name: Initialize Reports Directory
+        run: mkdir -p reports/report_history
+        
+      # 1. Download all reports from the matrix runs
       - name: Download Windows Reports Artifact
         uses: actions/download-artifact@v4
         with:
@@ -84,21 +29,32 @@ jobs:
           name: analysis-reports-ubuntu-latest
           path: reports/
 
-      - name: Prepare Final Deployment Artifact (Build History)
+      # 2. PERSISTENCE FIX: Pull existing history from the repository
+      - name: Retrieve Existing History (and clone into history_temp)
+        uses: actions/checkout@v4
+        with:
+          ref: report_history # Use a dedicated branch for history
+          path: history_temp
+          
+      - name: Merge Existing History with New Reports
         shell: bash
         run: |
-          # 1. Create history structure
-          mkdir -p reports/report_history
+          # Copy old reports into the new structure
+          if [ -d history_temp/reports/report_history ]; then
+            echo "Copying existing reports from history_temp..."
+            cp -r history_temp/reports/report_history/* reports/report_history/ 
+          fi
           
-          # 2. Archive all newly generated reports into report_history
-          # We search for the OS-specific reports created in the matrix runs
+          # 3. Archive all newly generated reports (from matrix) into report_history
+          # Reports generated in the current run:
           cp reports/*_ubuntu-latest.html reports/report_history/
           cp reports/*_windows-latest.html reports/report_history/
+
+          # 4. Choose ONE (Ubuntu) report to be the main index.html for the latest run
+          LATEST_UBUNTU_REPORT=$(ls -t reports/*_ubuntu-latest.html | head -n 1)
+          cp "$LATEST_UBUNTU_REPORT" reports/index.html
           
-          # 3. Choose ONE (Ubuntu) report to be the main index.html for the latest run
-          cp reports/*_ubuntu-latest.html reports/index.html
-          
-          # 4. Generate History Index Page (This runs only once now)
+          # 5. Generate History Index Page (Runs once)
           REPORT_FILES=$(find reports/report_history -maxdepth 1 -type f -name 'firmware_analysis_report_*.html' | sort -r)
           
           HISTORY_LINKS=""
@@ -113,7 +69,7 @@ jobs:
           # Use the template file and substitute the links variable
           cat history_template.html | sed "s|\$HISTORY_LINKS|$HISTORY_LINKS|g" > reports/report_history/index.html
 
-      # 5. Upload the final prepared 'reports' folder for deployment
+      # 6. Upload the final prepared 'reports' folder for deployment
       - name: Upload Final Deployment Artifact
         uses: actions/upload-pages-artifact@v4
         with:
@@ -122,6 +78,8 @@ jobs:
       # ---------------------------------------------
       # Docker Image Build/Push for GHCR
       # ---------------------------------------------
+      # ... (Docker build steps remain unchanged) ...
+      
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
           
