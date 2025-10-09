@@ -34,26 +34,23 @@ jobs:
         # 1. Run the script directly with the build number argument
         python firmware_monitor.py ${{ github.run_number }}
         
-        # 2. Find the most recently created HTML report (which includes build# in filename)
+        # 2. Find the most recently created HTML report
         LATEST_REPORT_PATH=$(ls -t reports/*.html | head -n 1)
-        LATEST_REPORT_FILE=$(basename "$LATEST_REPORT_PATH")
         if [ -z "$LATEST_REPORT_PATH" ]; then
           echo "::error::No report file found!"
           exit 1
         fi
         echo "Found latest report: $LATEST_REPORT_PATH"
 
-        # 3. Create the history folder and copy the report
+        # 3. Create the history folder and copy the latest report
         mkdir -p reports/report_history
         cp "$LATEST_REPORT_PATH" reports/report_history/
-        
-        # 4. Copy the latest report to index.html for the main page
         cp "$LATEST_REPORT_PATH" reports/index.html
 
-        # 5. Generate the History Index Page 
+        # 4. Generate the History Index Page (FIXED: Using sed to avoid YAML EOF errors)
         echo "Generating report_history/index.html"
         
-        # Find all report files in the history directory
+        # Build the list of links
         REPORT_FILES=$(find reports/report_history -maxdepth 1 -type f -name 'firmware_analysis_report_*.html' | sort -r)
         
         HISTORY_LINKS=""
@@ -62,35 +59,9 @@ jobs:
           link_name=$(echo "$filename" | sed -E 's/firmware_analysis_report_([0-9]{8})_([0-9]{6})_([0-9]+).html/Report Date: \1 Time: \2 Build: \3/')
           HISTORY_LINKS+="<li><a href=\"$filename\">$link_name</a></li>"
         done
-
-        # Write the HTML file (EOF MUST be at the beginning of the line)
-        cat <<EOF > reports/report_history/index.html
-<!DOCTYPE html>
-<html>
-<head>
-    <title>Report History</title>
-    <style>
-        body { font-family: sans-serif; padding: 20px; background-color: #f8f8f8; }
-        h1 { color: #1d4ed8; }
-        .back-link { 
-            display: inline-block; margin-bottom: 20px; padding: 10px 15px; background-color: #dbeafe; 
-            border-radius: 6px; text-decoration: none; color: #1d4ed8; font-weight: 600;
-        }
-        ul { list-style: none; padding: 0; }
-        li { margin-bottom: 10px; padding: 10px; border: 1px solid #ccc; border-radius: 4px; background-color: #fff; }
-        li a { text-decoration: none; color: #059669; font-weight: bold; }
-    </style>
-</head>
-<body>
-    <a href="../index.html" class="back-link">← Back to Latest Report</a>
-    <h1>Archived Report History</h1>
-    <ul>
-        $HISTORY_LINKS
-    </ul>
-    <p>All reports are archived here: luckyjoy.github.io/firmware_monitor/report_history/</p>
-</body>
-</html>
-EOF
+        
+        # Use the template file and substitute the links variable
+        sed "s|\$HISTORY_LINKS|$HISTORY_LINKS|g" history_template.html > reports/report_history/index.html
         
     - name: Upload Report Artifact
       uses: actions/upload-pages-artifact@v3
