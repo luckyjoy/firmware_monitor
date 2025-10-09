@@ -15,10 +15,14 @@ permissions:
   id-token: write    
   packages: write    
 
-jobs: # <--- CRITICAL: Must be flush left (zero indentation)
-  build_and_test: # <--- Must be indented exactly two spaces
-    runs-on: ubuntu-latest
-    
+jobs:
+  # --- Stage 1: Run Tests on Matrix and Generate Reports ---
+  test_and_prepare:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
@@ -28,70 +32,40 @@ jobs: # <--- CRITICAL: Must be flush left (zero indentation)
       with:
         python-version: '3.10'
 
-    - name: Run Analysis Script & Prepare Reports
+    - name: Run Analysis Script & Rename Report (${{ matrix.os }})
+      id: generate_report
+      # Use bash shell for file operations on both OS runners
+      shell: bash
       run: |
-        # Ensure report filename is consistent across runs
-        REPORT_FILE="reports/firmware_analysis_report_${{ github.run_number }}.html"
-        # Assuming your script handles argument parsing (e.g., using argparse)
-        python firmware_monitor.py --build-number ${{ github.run_number }}
+        # 1. Run the script with the build number as a simple positional argument
+        python firmware_monitor.py ${{ github.run_number }}
         
-        # Ensure the reports directory exists
-        mkdir -p reports/report_history
+        # 2. Find the most recently created HTML report (Robust discovery)
+        LATEST_REPORT_PATH=$(ls -t reports/*.html | head -n 1)
         
-        # Copy the report to the historical path
-        cp "$REPORT_FILE" reports/report_history/
+        if [ -z "$LATEST_REPORT_PATH" ]; then
+          echo "::error::No report file found!"
+          exit 1
+        fi
         
-        # Copy the latest report to the root index.html path
-        cp "$REPORT_FILE" reports/index.html
+        # 3. Rename the generated report to include the OS name for uniqueness
+        OS_SUFFIX=$(echo "${{ matrix.os }}" | tr '[:upper:]' '[:lower:]')
+        BASE_NAME=$(basename "$LATEST_REPORT_PATH" .html)
+        NEW_FILENAME="${BASE_NAME}_${OS_SUFFIX}.html"
         
-        # NOTE: The logic for generating report_history/index.html 
-        # is missing from this version and will prevent the history page 
-        # from updating. Please refer to the previous multi-OS solution 
-        # for the correct history generation steps if this is intended.
-        
-    - name: Upload Report Artifact
-      uses: actions/upload-pages-artifact@v3
+        mv "$LATEST_REPORT_PATH" "reports/$NEW_FILENAME"
+        echo "Renamed report: reports/$NEW_FILENAME"
+
+    # 4. Upload the reports folder as an artifact for the next job
+    - name: Upload Analysis Reports Artifact
+      uses: actions/upload-artifact@v4
       with:
-        path: 'reports/' 
-        
-    # ---------------------------------------------
-    # Docker Image Build/Push for GHCR
-    # ---------------------------------------------
+        name: analysis-reports-${{ matrix.os }}
+        path: reports/
 
-    - name: Set up Docker Buildx
-      uses: docker/setup-buildx-action@v3
-
-    - name: Build Local Analysis Image Dockerfile
-      run: |
-        cat <<EOF > Dockerfile.ci
-        FROM python:3.10-slim
-        WORKDIR /app
-        COPY firmware_monitor.py .
-        CMD ["python", "firmware_monitor.py"]
-        EOF
-        
-    - name: Log in to GitHub Container Registry (GHCR)
-      if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-      uses: docker/login-action@v3
-      with:
-        registry: ghcr.io
-        username: ${{ github.actor }}
-        password: ${{ secrets.GITHUB_TOKEN }}
-
-    - name: Build and push Docker image
-      if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-      uses: docker/build-push-action@v5
-      with:
-        context: .
-        push: true
-        file: Dockerfile.ci
-        tags: |
-          ghcr.io/${{ github.repository }}:latest
-          ghcr.io/${{ github.repository }}:${{ github.sha }}
-
-  deploy: # <--- Must be indented exactly two spaces, parallel to build_and_test
-    # This job handles the Pages deployment in isolation
-    needs: build_and_test
+  # --- Stage 2: Combine Reports, Build History, Deploy ---
+  build_and_deploy:
+    needs: test_and_prepare
     runs-on: ubuntu-latest
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     environment:
@@ -99,6 +73,92 @@ jobs: # <--- CRITICAL: Must be flush left (zero indentation)
       url: ${{ steps.deployment.outputs.page_url }}
     
     steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        
+      # 1. Initialize Reports Directory
+      - name: Initialize Reports Directory
+        run: mkdir -p reports/report_history
+        
+      # 2. Download all reports from the matrix runs
+      - name: Download Windows Reports Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: analysis-reports-windows-latest
+          path: reports/
+          
+      - name: Download Ubuntu Reports Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: analysis-reports-ubuntu-latest
+          path: reports/
+
+      # 3. Merge Existing History with New Reports
+      - name: Prepare Final Deployment Artifact (Build History)
+        shell: bash
+        run: |
+          # --- Persistence Logic: Pull existing history from the repository ---
+          # CRITICAL: We need a dedicated action to retrieve the existing history files
+          # This simulates the dedicated branch approach by merging old files into the new structure
+          
+          # Since the provided code does not fully implement the history branch, 
+          # we must assume the files in the download artifacts are the *only* ones.
+          
+          # 4. Archive all newly generated reports (from matrix) into report_history
+          cp reports/*_ubuntu-latest.html reports/report_history/
+          cp reports/*_windows-latest.html reports/report_history/
+
+          # 5. Choose ONE (Ubuntu) report to be the main index.html for the latest run
+          LATEST_UBUNTU_REPORT=$(ls -t reports/*_ubuntu-latest.html | head -n 1)
+          cp "$LATEST_UBUNTU_REPORT" reports/index.html
+          
+          # 6. Generate History Index Page (This runs only once now)
+          REPORT_FILES=$(find reports/report_history -maxdepth 1 -type f -name 'firmware_analysis_report_*.html' | sort -r)
+          
+          HISTORY_LINKS=""
+          for file_path in $REPORT_FILES; do
+            filename=$(basename "$file_path")
+            
+            # Add OS suffix to link name for clarity in the history index
+            link_name=$(echo "$filename" | sed -E 's/firmware_analysis_report_([0-9]{8})_([0-9]{6})_([0-9]+)_(.*).html/Report Date: \1 Time: \2 Build: \3 OS: \4/')
+            HISTORY_LINKS+="<li><a href=\"$filename\">$link_name</a></li>"
+          done
+          
+          # Use the template file and substitute the links variable
+          cat history_template.html | sed "s|\$HISTORY_LINKS|$HISTORY_LINKS|g" > reports/report_history/index.html
+
+      # 7. Upload the final prepared 'reports' folder for deployment
+      - name: Upload Final Deployment Artifact
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: 'reports/' 
+          
+      # ---------------------------------------------
+      # Docker Image Build/Push for GHCR
+      # ---------------------------------------------
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+          
+      - name: Log in to GitHub Container Registry (GHCR)
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          file: Dockerfile 
+          tags: |
+            ghcr.io/${{ github.repository }}:latest
+            ghcr.io/${{ github.repository }}:${{ github.sha }}
+
+      # ---------------------------------------------
+      # GitHub Pages Deployment
+      # ---------------------------------------------
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
