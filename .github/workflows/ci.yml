@@ -1,4 +1,5 @@
 name: Firmware Monitor CI
+
 on:
   push:
     branches:
@@ -7,6 +8,27 @@ on:
     branches:
       - main
   workflow_dispatch:
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+  packages: write
+
+jobs:
+  build_and_test:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.10'
+
+    - name: Run Analysis Script & Prepare Reports
       id: generate_report
       run: |
         # 1. Run the script directly with the build number argument
@@ -21,16 +43,14 @@ on:
         fi
         echo "Found latest report: $LATEST_REPORT_PATH"
 
-        # 3. Create the history folder
+        # 3. Create the history folder and copy the report
         mkdir -p reports/report_history
-        
-        # 4. Copy the latest report to the history folder (its name already includes the build number)
         cp "$LATEST_REPORT_PATH" reports/report_history/
         
-        # 5. Copy the latest report to index.html for the main page
+        # 4. Copy the latest report to index.html for the main page
         cp "$LATEST_REPORT_PATH" reports/index.html
 
-        # 6. Generate the History Index Page (FIXED: Provide a link to report_history at the GitHub page)
+        # 5. Generate the History Index Page
         echo "Generating report_history/index.html"
         
         # Find all report files in the history directory
@@ -43,7 +63,7 @@ on:
           HISTORY_LINKS+="<li><a href=\"$filename\">$link_name</a></li>"
         done
 
-        # Write the HTML file
+        # Write the HTML file (CAT EOF STARTS HERE)
         cat <<EOF > reports/report_history/index.html
 <!DOCTYPE html>
 <html>
@@ -71,3 +91,47 @@ on:
 </body>
 </html>
 EOF
+        
+    - name: Upload Report Artifact
+      uses: actions/upload-pages-artifact@v3
+      with:
+        path: 'reports/' 
+        
+    # ---------------------------------------------
+    # Docker Image Build/Push for GHCR
+    # ---------------------------------------------
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+        
+    - name: Log in to GitHub Container Registry (GHCR)
+      if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+      uses: docker/login-action@v3
+      with:
+        registry: ghcr.io
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Build and push Docker image
+      if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        push: true
+        file: ./Dockerfile 
+        tags: |
+          ghcr.io/${{ github.repository }}:latest
+          ghcr.io/${{ github.repository }}:${{ github.sha }}
+
+  deploy:
+    needs: build_and_test
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
