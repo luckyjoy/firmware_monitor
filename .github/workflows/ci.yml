@@ -50,7 +50,7 @@ jobs:
         # 4. Copy the latest report to index.html for the main page
         cp "$LATEST_REPORT_PATH" reports/index.html
 
-        # 5. Generate the History Index Page
+        # 5. Generate the History Index Page (FIXED: The multi-line string is correctly terminated)
         echo "Generating report_history/index.html"
         
         # Find all report files in the history directory
@@ -63,7 +63,7 @@ jobs:
           HISTORY_LINKS+="<li><a href=\"$filename\">$link_name</a></li>"
         done
 
-        # Write the HTML file (CAT EOF STARTS HERE)
+        # Write the HTML file (EOF MUST be at the beginning of the line)
         cat <<EOF > reports/report_history/index.html
 <!DOCTYPE html>
 <html>
