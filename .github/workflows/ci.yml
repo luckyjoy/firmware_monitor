@@ -10,10 +10,10 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write    # For checkout, artifacts, and pushing to the history branch
-  pages: write       # For deploying to GitHub Pages
-  id-token: write    # For authentication with Pages deployment action
-  packages: write    # For pushing Docker images to GHCR
+  contents: write    
+  pages: write       
+  id-token: write    
+  packages: write    
 
 jobs:
   # --- Stage 1: Run Tests on Matrix and Generate Reports ---
@@ -34,13 +34,12 @@ jobs:
 
     - name: Run Analysis Script & Rename Report (${{ matrix.os }})
       id: generate_report
-      # Use bash shell for file operations on both OS runners for consistency
       shell: bash
       run: |
         # 1. Run the script with the build number as a simple positional argument
         python firmware_monitor.py ${{ github.run_number }}
         
-        # 2. Find the most recently created HTML report (Robust discovery: avoids hardcoded names)
+        # 2. Find the most recently created HTML report (Robust discovery)
         LATEST_REPORT_PATH=$(ls -t reports/*.html | head -n 1)
         
         if [ -z "$LATEST_REPORT_PATH" ]; then
@@ -109,7 +108,6 @@ jobs:
           # Copy old reports into the new structure before adding new ones
           if [ -d history_temp/reports/report_history ]; then
             echo "Copying existing reports from history_temp..."
-            # Note: The / is intentional to copy contents, not the folder itself
             cp -r history_temp/reports/report_history/* reports/report_history/ 
           fi
           
@@ -133,7 +131,6 @@ jobs:
             HISTORY_LINKS+="<li><a href=\"$filename\">$link_name</a></li>"
           done
           
-          # Use the template file and substitute the links variable
           cat history_template.html | sed "s|\$HISTORY_LINKS|$HISTORY_LINKS|g" > reports/report_history/index.html
 
       # 5. Upload the final prepared 'reports' folder for GitHub Pages deployment
@@ -142,14 +139,14 @@ jobs:
         with:
           path: 'reports/' 
           
-      # 6. Update the History Branch with the new combined reports (CRITICAL for Persistence)
+      # 6. Update the History Branch with the new combined reports (FIXED ACTION)
       - name: Push Combined History Back to Repository
-        uses: cpina/github-push-action@main
+        uses: ad-m/github-push-action@master # CORRECTED ACTION
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          path: reports/report_history # Only push the folder with all historical reports
+          directory: reports/report_history # Push the directory content
           commit_message: "CI: Updated persistent report history for build ${{ github.run_number }}"
-          target_branch: report_history
+          branch: report_history
           
       # ---------------------------------------------
       # Docker Image Build/Push for GHCR
@@ -169,7 +166,6 @@ jobs:
         with:
           context: .
           push: true
-          # NOTE: Using the simple Dockerfile name here, assuming you renamed it back.
           file: Dockerfile 
           tags: |
             ghcr.io/${{ github.repository }}:latest
