@@ -10,10 +10,10 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write    
-  pages: write       
-  id-token: write    
-  packages: write    
+  contents: write    # For checkout, artifacts, and pushing to the history branch
+  pages: write       # For deploying to GitHub Pages
+  id-token: write    # For authentication with Pages deployment action
+  packages: write    # For pushing Docker images to GHCR
 
 jobs:
   # --- Stage 1: Run Tests on Matrix and Generate Reports ---
@@ -34,13 +34,13 @@ jobs:
 
     - name: Run Analysis Script & Rename Report (${{ matrix.os }})
       id: generate_report
-      # Use bash shell for file operations on both OS runners
+      # Use bash shell for file operations on both OS runners for consistency
       shell: bash
       run: |
         # 1. Run the script with the build number as a simple positional argument
         python firmware_monitor.py ${{ github.run_number }}
         
-        # 2. Find the most recently created HTML report (Robust discovery)
+        # 2. Find the most recently created HTML report (Robust discovery: avoids hardcoded names)
         LATEST_REPORT_PATH=$(ls -t reports/*.html | head -n 1)
         
         if [ -z "$LATEST_REPORT_PATH" ]; then
@@ -73,14 +73,19 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     
     steps:
-      - name: Checkout code
+      # 1. Checkout the MAIN branch code (needed for Dockerfile and history_template.html)
+      - name: Checkout Main Branch Code
         uses: actions/checkout@v4
         
-      # 1. Initialize Reports Directory
-      - name: Initialize Reports Directory
-        run: mkdir -p reports/report_history
-        
-      # 2. Download all reports from the matrix runs
+      # 2. Retrieve Existing History from the dedicated branch (Persistence Fix)
+      - name: Retrieve Existing Report History
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.repository }}
+          ref: report_history # MUST EXIST in your repo!
+          path: history_temp
+          
+      # 3. Download all reports from the current matrix runs
       - name: Download Windows Reports Artifact
         uses: actions/download-artifact@v4
         with:
@@ -93,32 +98,36 @@ jobs:
           name: analysis-reports-ubuntu-latest
           path: reports/
 
-      # 3. Merge Existing History with New Reports
-      - name: Prepare Final Deployment Artifact (Build History)
+      # 4. Prepare Final Deployment Artifact (Combine History, Build Index)
+      - name: Prepare Reports for Deployment
         shell: bash
         run: |
-          # --- Persistence Logic: Pull existing history from the repository ---
-          # CRITICAL: We need a dedicated action to retrieve the existing history files
-          # This simulates the dedicated branch approach by merging old files into the new structure
+          # Create final deployment structure
+          mkdir -p reports/report_history
           
-          # Since the provided code does not fully implement the history branch, 
-          # we must assume the files in the download artifacts are the *only* ones.
+          # --- Merge Existing History (Persistence Fix) ---
+          # Copy old reports into the new structure before adding new ones
+          if [ -d history_temp/reports/report_history ]; then
+            echo "Copying existing reports from history_temp..."
+            # Note: The / is intentional to copy contents, not the folder itself
+            cp -r history_temp/reports/report_history/* reports/report_history/ 
+          fi
           
-          # 4. Archive all newly generated reports (from matrix) into report_history
+          # --- Add New Reports ---
+          # Archive all newly generated reports (from matrix) into report_history
           cp reports/*_ubuntu-latest.html reports/report_history/
           cp reports/*_windows-latest.html reports/report_history/
 
-          # 5. Choose ONE (Ubuntu) report to be the main index.html for the latest run
+          # Choose ONE (Ubuntu) report to be the main index.html for the latest run
           LATEST_UBUNTU_REPORT=$(ls -t reports/*_ubuntu-latest.html | head -n 1)
           cp "$LATEST_UBUNTU_REPORT" reports/index.html
           
-          # 6. Generate History Index Page (This runs only once now)
+          # Generate History Index Page
           REPORT_FILES=$(find reports/report_history -maxdepth 1 -type f -name 'firmware_analysis_report_*.html' | sort -r)
           
           HISTORY_LINKS=""
           for file_path in $REPORT_FILES; do
             filename=$(basename "$file_path")
-            
             # Add OS suffix to link name for clarity in the history index
             link_name=$(echo "$filename" | sed -E 's/firmware_analysis_report_([0-9]{8})_([0-9]{6})_([0-9]+)_(.*).html/Report Date: \1 Time: \2 Build: \3 OS: \4/')
             HISTORY_LINKS+="<li><a href=\"$filename\">$link_name</a></li>"
@@ -127,11 +136,20 @@ jobs:
           # Use the template file and substitute the links variable
           cat history_template.html | sed "s|\$HISTORY_LINKS|$HISTORY_LINKS|g" > reports/report_history/index.html
 
-      # 7. Upload the final prepared 'reports' folder for deployment
+      # 5. Upload the final prepared 'reports' folder for GitHub Pages deployment
       - name: Upload Final Deployment Artifact
         uses: actions/upload-pages-artifact@v4
         with:
           path: 'reports/' 
+          
+      # 6. Update the History Branch with the new combined reports (CRITICAL for Persistence)
+      - name: Push Combined History Back to Repository
+        uses: cpina/github-push-action@main
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          path: reports/report_history # Only push the folder with all historical reports
+          commit_message: "CI: Updated persistent report history for build ${{ github.run_number }}"
+          target_branch: report_history
           
       # ---------------------------------------------
       # Docker Image Build/Push for GHCR
@@ -151,6 +169,7 @@ jobs:
         with:
           context: .
           push: true
+          # NOTE: Using the simple Dockerfile name here, assuming you renamed it back.
           file: Dockerfile 
           tags: |
             ghcr.io/${{ github.repository }}:latest
