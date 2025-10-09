@@ -155,9 +155,9 @@ def evaluate_scenario(scenario_data, thresholds):
 
     if found_fail:
         scenario_status = "FAIL"
-    elif found_pass and found_skip:
+    elif found_pass and not found_fail and found_skip:
         scenario_status = "MIXED"
-    elif found_pass:
+    elif found_pass and not found_fail:
         scenario_status = "PASS"
     else:
         scenario_status = "SKIP"
@@ -194,7 +194,7 @@ class FirmwarePerformanceAnalyzer:
         report_dir = os.path.join(os.getcwd(), "reports")
         os.makedirs(report_dir, exist_ok=True)
 
-        local_tz = datetime.datetime.now().astimezone().tzinfo
+        local_tz = pytz.timezone('America/Los_Angeles')
         timestamp = datetime.datetime.now(local_tz).strftime("%Y%m%d_%H%M%S")
 
         base_filename = f"firmware_analysis_report_{timestamp}"
@@ -276,7 +276,6 @@ class FirmwarePerformanceAnalyzer:
                         </div>
                     """
             
-            # ** FIX IS HERE **
             # Pre-calculate complex expressions to simplify the f-string and avoid syntax errors.
             status_color = STATUS_COLORS.get(result['scenario_status'], '#000')
             scenario_status_label = render_status_label(result['scenario_status'])

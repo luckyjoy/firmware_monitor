@@ -31,20 +31,27 @@ jobs:
         python-version: '3.10'
 
     - name: Run Analysis Script & Prepare Reports
-      # 1. Run the script using the build number argument (which we fixed in the script).
-      # 2. Set up the GitHub Pages directory structure (index.html for latest, plus history).
+      id: generate_report
       run: |
-        REPORT_FILE="reports/firmware_analysis_report_${{ github.run_number }}.html"
-        python firmware_monitor.py --build-number ${{ github.run_number }}
+        # 1. Run the script, passing the build number as a positional argument.
+        python firmware_monitor.py ${{ github.run_number }}
         
-        # Ensure the reports directory exists
+        # 2. Find the most recently created HTML report. This is robust and avoids timestamp mismatches.
+        LATEST_REPORT=$(ls -t reports/*.html | head -n 1)
+        if [ -z "$LATEST_REPORT" ]; then
+          echo "::error::No report file found!"
+          exit 1
+        fi
+        echo "Found latest report: $LATEST_REPORT"
+
+        # 3. Create the history directory.
         mkdir -p reports/report_history
         
-        # Copy the report to the historical path
-        cp "$REPORT_FILE" reports/report_history/
+        # 4. Copy the latest report to the history folder (its name already includes the build number).
+        cp "$LATEST_REPORT" reports/report_history/
         
-        # Copy the latest report to the root index.html path for the main pages URL
-        cp "$REPORT_FILE" reports/index.html
+        # 5. Copy the latest report to index.html to serve as the main page.
+        cp "$LATEST_REPORT" reports/index.html
         
     - name: Upload Report Artifact
       # Upload the entire 'reports' directory (containing index.html and report_history/)
