@@ -26,10 +26,7 @@ jobs:
     - name: Set up Python
       uses: actions/setup-python@v5
       with:
-        # No caching needed since there are no dependencies
         python-version: '3.10'
-
-    # Dependency installation step removed as per your request
 
     - name: Run Analysis Script & Prepare Reports
       id: generate_report
@@ -37,7 +34,7 @@ jobs:
         # 1. Run the script directly with the build number argument
         python firmware_monitor.py ${{ github.run_number }}
         
-        # 2. Find the most recently created HTML report
+        # 2. Find the most recently created HTML report (which includes build# in filename)
         LATEST_REPORT=$(ls -t reports/*.html | head -n 1)
         if [ -z "$LATEST_REPORT" ]; then
           echo "::error::No report file found!"
@@ -45,26 +42,22 @@ jobs:
         fi
         echo "Found latest report: $LATEST_REPORT"
 
-        # 3. Create the history folder and copy the report
+        # 3. Create the history folder and copy the report (FIXED: creates report_history folder)
         mkdir -p reports/report_history
         cp "$LATEST_REPORT" reports/report_history/
         
-        # 4. Copy the latest report to index.html for the main page
+        # 4. Copy the latest report to index.html for the main page (FIXED: appends build# to history, index is clean)
         cp "$LATEST_REPORT" reports/index.html
         
     - name: Upload Report Artifact
-      # Upload the entire 'reports' directory (containing index.html and report_history/)
       uses: actions/upload-pages-artifact@v3
       with:
         path: 'reports/' 
         
     # ---------------------------------------------
-    # Docker Image Build/Push for GHCR (Simplified)
+    # Docker Image Build/Push for GHCR (Uses new simple Dockerfile)
     # ---------------------------------------------
-    # NOTE: The temporary Dockerfile creation step has been removed. 
-    # If you want the Docker image to be built, ensure a simple Dockerfile 
-    # (like the one below) exists in your repo root.
-    
+
     - name: Set up Docker Buildx
       uses: docker/setup-buildx-action@v3
         
@@ -82,7 +75,7 @@ jobs:
       with:
         context: .
         push: true
-        # Assuming your Dockerfile now uses a simple python:3.10-slim base
+        # This will use the new, simple Dockerfile
         file: ./Dockerfile 
         tags: |
           ghcr.io/${{ github.repository }}:latest
