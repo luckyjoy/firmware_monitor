@@ -47,7 +47,7 @@ jobs:
         cp "$LATEST_REPORT_PATH" reports/report_history/
         cp "$LATEST_REPORT_PATH" reports/index.html
 
-        # 4. Generate the History Index Page (FIXED: Using sed to avoid YAML EOF errors)
+        # 4. Generate the History Index Page (Using sed to avoid EOF indentation errors)
         echo "Generating report_history/index.html"
         
         # Build the list of links
