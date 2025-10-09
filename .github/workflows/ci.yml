@@ -63,7 +63,7 @@ jobs:
           HISTORY_LINKS+="<li><a href=\"$filename\">$link_name</a></li>"
         done
 
-        # Write the HTML file
+        # Write the HTML file (EOF MUST be at the beginning of the line)
         cat <<EOF > reports/report_history/index.html
 <!DOCTYPE html>
 <html>
@@ -90,7 +90,7 @@ jobs:
     <p>All reports are archived here: luckyjoy.github.io/firmware_monitor/report_history/</p>
 </body>
 </html>
-EOF # <--- THIS LINE MUST BE THE FINAL LINE OF THE SCRIPT BLOCK, WITH NO LEADING SPACES (Line 68)
+EOF
         
     - name: Upload Report Artifact
       uses: actions/upload-pages-artifact@v3
