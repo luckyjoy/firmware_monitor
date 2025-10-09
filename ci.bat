@@ -1,8 +1,8 @@
 @echo off
-
+cat reports\dummy.txt
 echo %RANDOM% > reports\dummy.txt
 echo Add dummy file dummy.txt and make a git push to main
-
+cat reports\dummy.txt
 git add .
 
 rem echo Git pushed a dummy file for CI Demo
