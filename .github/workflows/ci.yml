@@ -47,17 +47,17 @@ jobs:
           name: reports-${{ matrix.os }}
           path: reports
 
-  publish_site:
+  # ⬇️ RENAMED JOB: publish_site is now deploy
+  deploy:
     needs: build_reports
     runs-on: ubuntu-latest
     steps:
-      # ⬇️ FIX 1: Checkout the main branch to the root (where firmware_monitor.py lives)
+      # Checkout steps remain the same to ensure correct paths
       - name: Checkout main branch
         uses: actions/checkout@v4
         with:
           ref: main 
           
-      # ⬇️ FIX 2: Checkout the archive branch into an isolated _hist folder
       - name: Checkout archive branch
         uses: actions/checkout@v4
         with:
@@ -76,13 +76,18 @@ jobs:
         with:
           python-version: '3.10'
 
+      - name: Debug: List reports before merge
+        run: |
+          echo "Listing files in ./reports directory:"
+          ls -R reports/
+
       - name: Merge reports and prepare site
         shell: bash
         run: |
           set -euo pipefail
           
           # 1) Re-run the script with all reports to generate a combined history report
-          # This should now work as the script is at the root and the reports folder is at ./reports
+          # If this fails, the problem is in your firmware_monitor.py script's logic
           python firmware_monitor.py 
           
           # 2) Copy the final merged report and history index to the site root
@@ -120,6 +125,7 @@ jobs:
         with:
           path: _site/
 
+      # ✅ This step provides the direct link you requested upon successful execution.
       - name: Report GitHub Pages URL
         run: |
           REPORT_URL="https://luckyjoy.github.io/firmware_monitor/"
