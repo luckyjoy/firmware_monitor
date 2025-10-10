@@ -5,26 +5,16 @@ Firmware Performance Monitor & Report Generator
 Generates detailed firmware performance analysis reports
 in both TXT and HTML formats with scenario-based metrics.
 
-Features:
-- 6 fixed scenarios with dummy data
-- Metrics evaluation (PASS/FAIL/SKIP) with thresholds
-- Scenario-level status (PASS/FAIL/MIXED/SKIP)
-- Auto-SKIP if metric missing
-- Summary table with PASS percentages
-- Optional build number (CLI input)
-- Reports saved in ./reports/ with local timestamp
-- Author attribution included
+Changes in this version:
+- Robust navigation using absolute URLs suitable for GitHub Pages project sites.
+- SITE_BASE_PATH env var to override the base path (defaults to '/firmware_monitor/').
 """
 
 import os
 import sys
 import datetime
 
-
-# -------------------------------------------------------------------
-# CONFIGURATION
-# -------------------------------------------------------------------
-
+# -------------------- CONFIGURATION --------------------
 # Thresholds for evaluation (fixed values)
 THRESHOLDS = {
     "CPU (%)": 80.0,
@@ -37,17 +27,24 @@ THRESHOLDS = {
 
 # Status color mapping
 STATUS_COLORS = {
-    "PASS": "#10b981",   # green
-    "FAIL": "#ef4444",   # red
-    "SKIP": "#6b7280",   # gray
-    "MIXED": "#f59e0b"   # amber
+    "PASS": "#10b981",  # green
+    "FAIL": "#ef4444",  # red
+    "SKIP": "#6b7280",  # gray
+    "MIXED": "#f59e0b"  # amber
 }
 
+# GitHub Pages project base path (absolute URL path).
+# Example for repo "firmware_monitor": "/firmware_monitor/"
+SITE_BASE_PATH = os.environ.get("SITE_BASE_PATH", "/firmware_monitor/")
+if not SITE_BASE_PATH.startswith("/"):
+    SITE_BASE_PATH = "/" + SITE_BASE_PATH
+if not SITE_BASE_PATH.endswith("/"):
+    SITE_BASE_PATH += "/"
 
-# -------------------------------------------------------------------
-# DATASET: FIXED DUMMY DATA
-# -------------------------------------------------------------------
+LATEST_URL = SITE_BASE_PATH  # e.g., "/firmware_monitor/"
+HISTORY_URL = SITE_BASE_PATH + "report_history/"
 
+# -------------------- DATASET: FIXED DUMMY DATA --------------------
 MOCK_LOG_DATA = [
     {
         "scenario": "Low Load Boot",
@@ -109,7 +106,7 @@ MOCK_LOG_DATA = [
         "metrics": {
             "Boot Timestamps": {"min": 100, "max": 5000, "avg": 3000},
             "CPU (%)": {"min": 2, "max": 15, "avg": 8},
-            # Memory (KB) missing → auto SKIP
+            # Memory (KB) missing -> auto SKIP
             "Power (mW)": {"min": 15, "max": 40, "avg": 20},
             "Temperature (°C)": {"min": 30, "max": 40, "avg": 35},
             "Latency (us)": {"min": 500, "max": 2000, "avg": 1200},
@@ -117,11 +114,7 @@ MOCK_LOG_DATA = [
     }
 ]
 
-
-# -------------------------------------------------------------------
-# EVALUATION FUNCTIONS
-# -------------------------------------------------------------------
-
+# -------------------- EVALUATION FUNCTIONS --------------------
 def evaluate_metric(metric_name, values, thresholds):
     if not values or "avg" not in values:
         return "SKIP"
@@ -142,9 +135,8 @@ def evaluate_scenario(scenario_data, thresholds):
             status = evaluate_metric(metric_name, values, thresholds)
         else:
             status = "SKIP"
-        
         results[metric_name] = status
-        
+
         if status == "FAIL":
             found_fail = True
         elif status == "PASS":
@@ -160,7 +152,7 @@ def evaluate_scenario(scenario_data, thresholds):
         scenario_status = "PASS"
     else:
         scenario_status = "SKIP"
-        
+
     return results, scenario_status
 
 
@@ -169,10 +161,7 @@ def render_status_label(status):
     return f'<span style="color:{color}; font-weight:bold;">{status}</span>'
 
 
-# -------------------------------------------------------------------
-# REPORT GENERATION
-# -------------------------------------------------------------------
-
+# -------------------- REPORT GENERATION --------------------
 class FirmwarePerformanceAnalyzer:
     def __init__(self, build_number=None):
         self.build_number = build_number if build_number else "NA"
@@ -193,9 +182,8 @@ class FirmwarePerformanceAnalyzer:
         report_dir = os.path.join(os.getcwd(), "reports")
         os.makedirs(report_dir, exist_ok=True)
 
-        # FIX: Removed pytz dependency, using standard local time
+        # Local time in a simple timestamp
         timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-
         base_filename = f"firmware_analysis_report_{timestamp}"
         if self.build_number != "NA":
             base_filename += f"_{self.build_number}"
@@ -217,7 +205,7 @@ class FirmwarePerformanceAnalyzer:
         lines.append(f"Author: Bang Thien Nguyen ontario1998@gmail.com")
         lines.append(f"Build Number: {self.build_number}")
         lines.append(f"Test Run Timestamp: {timestamp}")
-        lines.append("="*60)
+        lines.append("=" * 60)
 
         for result in self.results:
             lines.append(f"\nScenario: {result['scenario']}")
@@ -225,11 +213,16 @@ class FirmwarePerformanceAnalyzer:
             for metric, status in sorted(result["metric_status"].items()):
                 values = result["metrics"].get(metric)
                 if values:
-                    lines.append(f"  {metric}: Min={values['min']} | Max={values['max']} | Avg={values['avg']} -> {status}")
+                    lines.append(
+                        f" {metric}: Min={values['min']} "
+                        f"Max={values['max']} "
+                        f"Avg={values['avg']} -> {status}"
+                    )
                 else:
-                    lines.append(f"  {metric}: Not available -> {status}")
+                    lines.append(f" {metric}: Not available -> {status}")
+
             lines.append(f"Scenario Status: {result['scenario_status']}")
-            lines.append("-"*40)
+            lines.append("-" * 40)
 
         # --- Test Suites Summary ---
         suite_pass, suite_fail, suite_mixed, suite_skip = self._get_suite_summary_counts()
@@ -250,17 +243,16 @@ class FirmwarePerformanceAnalyzer:
         return "\n".join(lines)
 
     def generate_html_report(self, timestamp):
-        author_line = f"<div class='author-info'>Author: Bang Thien Nguyen &lt;ontario1998@gmail.com&gt;</div>"
-        build_line = f"<div class='author-info'>Build Number: {self.build_number} | Test Run Timestamp: {timestamp}</div>"
-        
-        # --- FIX: ADDED NAVIGATION BAR FOR HISTORY LINK ---
-        nav_bar = """
-            <div class="nav-bar">
-                <a href="index.html" class="nav-link">Latest Report</a>
-                <a href="report_history/index.html" class="nav-link nav-link-history">Report History</a>
-            </div>
+        author_line = f"<div class='author-info'>Author: Bang Thien Nguyen <ontario1998@gmail.com></div>"
+        build_line = f"<div class='author-info'>Build Number: {self.build_number} &nbsp;|&nbsp; Test Run Timestamp: {timestamp}</div>"
+
+        # Navigation bar with absolute URLs (robust under GitHub Pages project path)
+        nav_bar = f"""
+        <div class="nav-bar">
+          {LATEST_URL}Latest Report</a>
+          {HISTORY_URL}Report History</a>
+        </div>
         """
-        # ------------------------------------------------
 
         scenario_html = ""
         for result in self.results:
@@ -271,32 +263,31 @@ class FirmwarePerformanceAnalyzer:
                 status_label = render_status_label(status)
                 if values:
                     metric_html += f"""
-                        <div class="metric-item">
-                            <span class="metric-key">{metric}</span>
-                            <span class="metric-value">Min: {values['min']} | Max: {values['max']} | Avg: {values['avg']} → {status_label}</span>
-                        </div>
+                    <div class="metric-item">
+                      <span class="metric-key">{metric}</span>
+                      <span class="metric-value">Min: {values['min']} &nbsp; Max: {values['max']} &nbsp; Avg: {values['avg']} → {status_label}</span>
+                    </div>
                     """
                 else:
                     metric_html += f"""
-                        <div class="metric-item">
-                            <span class="metric-key">{metric}</span>
-                            <span class="metric-value">Not available → {status_label}</span>
-                        </div>
+                    <div class="metric-item">
+                      <span class="metric-key">{metric}</span>
+                      <span class="metric-value">Not available → {status_label}</span>
+                    </div>
                     """
-            
+
             status_color = STATUS_COLORS.get(result['scenario_status'], '#000')
             scenario_status_label = render_status_label(result['scenario_status'])
-
             scenario_html += f"""
-                <div class="scenario-card">
-                    <h3>{result['scenario']}</h3>
-                    <div class="metric-group">
-                        {metric_html}
-                    </div>
-                    <div class="test-result" style="border-left: 4px solid {status_color}; background:#f9fafb; padding:8px; margin-top:10px;">
-                        Scenario Status: {scenario_status_label}
-                    </div>
-                </div>
+            <div class="scenario-card">
+              <h3>{result['scenario']}</h3>
+              <div class="metric-group">
+                {metric_html}
+              </div>
+              <div class="test-result" style="border-left: 4px solid {status_color}; background:#f9fafb; padding:8px; margin-top:10px;">
+                Scenario Status: {scenario_status_label}
+              </div>
+            </div>
             """
 
         # --- Test Suites Summary HTML ---
@@ -304,14 +295,14 @@ class FirmwarePerformanceAnalyzer:
         total_suites = len(self.results)
         suite_pass_percent = (suite_pass / total_suites * 100) if total_suites > 0 else 0
         suite_summary_html = f"""
-            <div class="summary-card">
-                <h2>Overall Summary (Test Suites)</h2>
-                <div class="summary-item"><span class="summary-key">Total Test Suites</span><span class="summary-value">{total_suites}</span></div>
-                <div class="summary-item"><span class="summary-key">PASS</span><span class="summary-value" style="color:{STATUS_COLORS['PASS']};">{suite_pass} ({suite_pass_percent:.2f}%)</span></div>
-                <div class="summary-item"><span class="summary-key">FAIL</span><span class="summary-value" style="color:{STATUS_COLORS['FAIL']};">{suite_fail}</span></div>
-                <div class="summary-item"><span class="summary-key">MIXED</span><span class="summary-value" style="color:{STATUS_COLORS['MIXED']};">{suite_mixed}</span></div>
-                <div class="summary-item"><span class="summary-key">SKIP</span><span class="summary-value" style="color:{STATUS_COLORS['SKIP']};">{suite_skip}</span></div>
-            </div>
+        <div class="summary-card">
+          <h2>Overall Summary (Test Suites)</h2>
+          <div class="summary-item"><span class="summary-key">Total Test Suites</span><span class="summary-value">{total_suites}</span></div>
+          <div class="summary-item"><span class="summary-key">PASS</span><span class="summary-value" style="color:{STATUS_COLORS['PASS']};">{suite_pass} ({suite_pass_percent:.2f}%)</span></div>
+          <div class="summary-item"><span class="summary-key">FAIL</span><span class="summary-value" style="color:{STATUS_COLORS['FAIL']};">{suite_fail}</span></div>
+          <div class="summary-item"><span class="summary-key">MIXED</span><span class="summary-value" style="color:{STATUS_COLORS['MIXED']};">{suite_mixed}</span></div>
+          <div class="summary-item"><span class="summary-key">SKIP</span><span class="summary-value" style="color:{STATUS_COLORS['SKIP']};">{suite_skip}</span></div>
+        </div>
         """
 
         # --- Individual Tests Summary HTML ---
@@ -319,82 +310,77 @@ class FirmwarePerformanceAnalyzer:
         total_metrics = metric_pass + metric_fail + metric_skip
         metric_pass_percent = (metric_pass / total_metrics * 100) if total_metrics > 0 else 0
         metric_summary_html = f"""
-            <div class="summary-card" style="background-color: #e0f2fe; border-color: #7dd3fc; margin-top: 20px;">
-                <h2>Overall Summary (Individual Tests)</h2>
-                <div class="summary-item"><span class="summary-key">Total Individual Tests</span><span class="summary-value">{total_metrics}</span></div>
-                <div class="summary-item"><span class="summary-key">PASS</span><span class="summary-value" style="color:{STATUS_COLORS['PASS']};">{metric_pass} ({metric_pass_percent:.2f}%)</span></div>
-                <div class="summary-item"><span class="summary-key">FAIL</span><span class="summary-value" style="color:{STATUS_COLORS['FAIL']};">{metric_fail}</span></div>
-                <div class="summary-item"><span class="summary-key">SKIP</span><span class="summary-value" style="color:{STATUS_COLORS['SKIP']};">{metric_skip}</span></div>
-            </div>
+        <div class="summary-card" style="background-color: #e0f2fe; border-color: #7dd3fc; margin-top: 20px;">
+          <h2>Overall Summary (Individual Tests)</h2>
+          <div class="summary-item"><span class="summary-key">Total Individual Tests</span><span class="summary-value">{total_metrics}</span></div>
+          <div class="summary-item"><span class="summary-key">PASS</span><span class="summary-value" style="color:{STATUS_COLORS['PASS']};">{metric_pass} ({metric_pass_percent:.2f}%)</span></div>
+          <div class="summary-item"><span class="summary-key">FAIL</span><span class="summary-value" style="color:{STATUS_COLORS['FAIL']};">{metric_fail}</span></div>
+          <div class="summary-item"><span class="summary-key">SKIP</span><span class="summary-value" style="color:{STATUS_COLORS['SKIP']};">{metric_skip}</span></div>
+        </div>
         """
 
         html_output = f"""<!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Compact Firmware Analysis Report</title>
-    <style>
-        body {{ font-family: 'Inter', sans-serif; background-color: #f0f4f8; color: #1a202c; padding: 20px; margin: 0; line-height: 1.5; }}
-        .container {{ max-width: 1200px; margin: 0 auto; background-color: #ffffff; padding: 20px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); border-radius: 12px; }}
-        h1 {{ color: #1d4ed8; border-bottom: 3px solid #bfdbfe; padding-bottom: 10px; margin-bottom: 20px; font-size: 2em; }}
-        .author-info {{ color: #4b5563; font-size: 0.9em; margin-bottom: 5px; }}
-        
-        /* --- NEW NAVIGATION STYLES --- */
-        .nav-bar {{
-            display: flex;
-            justify-content: flex-start;
-            margin-bottom: 20px;
-            border-bottom: 1px solid #d1d5db;
-            padding-bottom: 10px;
-        }}
-        .nav-link {{
-            text-decoration: none;
-            color: #1d4ed8;
-            font-weight: 600;
-            padding: 5px 15px;
-            margin-right: 10px;
-            border: 1px solid #bfdbfe;
-            border-radius: 6px;
-            transition: background-color 0.2s;
-        }}
-        .nav-link:hover {{
-            background-color: #eff6ff;
-        }}
-        .nav-link-history {{
-            background-color: #dbeafe; /* Highlight the history link */
-        }}
-        /* --- END NEW NAVIGATION STYLES --- */
-        
-        .report-grid {{ display: grid; grid-template-columns: 1fr; gap: 20px; margin-top: 15px; }}
-        @media (min-width: 768px) {{ .report-grid {{ grid-template-columns: 1fr 1fr; }} }}
-        .scenario-card {{ background-color: #f9fafb; border: 1px solid #e5e7eb; padding: 15px; margin-bottom: 0; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }}
-        .scenario-card h3 {{ color: #059669; font-size: 1.4em; margin-top: 0; margin-bottom: 10px; border-bottom: 2px solid #a7f3d0; padding-bottom: 5px; }}
-        .metric-group {{ display: grid; grid-template-columns: 1fr; gap: 10px; margin-bottom: 15px; }}
-        @media (min-width: 640px) {{ .metric-group {{ grid-template-columns: 1fr 1fr; }} }}
-        @media (min-width: 1024px) {{ .metric-group {{ grid-template-columns: 1fr 1fr 1fr; }} }}
-        .metric-item {{ display: flex; justify-content: space-between; align-items: center; background-color: #ffffff; padding: 8px 12px; border-radius: 6px; border-left: 4px solid #fcd34d; font-size: 0.9em; box-shadow: 0 1px 2px rgba(0,0,0,0.03); }}
-        .metric-key {{ color: #4b5563; font-weight: 500; }}
-        .metric-value {{ color: #1f2937; font-weight: 700; text-align: right; }}
-        .summary-card {{ background-color: #dbeafe; border: 2px solid #93c5fd; padding: 20px; margin-top: 30px; border-radius: 10px; }}
-        .summary-card h2 {{ color: #1e3a8a; font-size: 1.8em; margin-top: 0; margin-bottom: 15px; text-align: center; }}
-        .summary-item {{ display: flex; justify-content: space-between; padding: 5px 0; border-bottom: 1px dotted #93c5fd; }}
-        .summary-key {{ font-weight: 600; color: #1f2937; }}
-        .summary-value {{ font-weight: 700; }}
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Compact Firmware Analysis Report</title>
+  <style>
+  body {{
+    font-family: 'Inter', system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+    background-color: #f0f4f8; color: #1a202c; padding: 20px; margin: 0; line-height: 1.5;
+  }}
+  .container {{
+    max-width: 1200px; margin: 0 auto; background-color: #ffffff; padding: 20px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1); border-radius: 12px;
+  }}
+  h1 {{
+    color: #1d4ed8; border-bottom: 3px solid #bfdbfe; padding-bottom: 10px; margin-bottom: 20px; font-size: 2em;
+  }}
+  .author-info {{ color: #4b5563; font-size: 0.9em; margin-bottom: 5px; }}
+  /* --- NAVIGATION STYLES --- */
+  .nav-bar {{
+    display: flex; justify-content: flex-start; margin-bottom: 20px; border-bottom: 1px solid #d1d5db; padding-bottom: 10px;
+  }}
+  .nav-link {{
+    text-decoration: none; color: #1d4ed8; font-weight: 600; padding: 5px 15px; margin-right: 10px;
+    border: 1px solid #bfdbfe; border-radius: 6px; transition: background-color 0.2s;
+  }}
+  .nav-link:hover {{ background-color: #eff6ff; }}
+  .nav-link-history {{ background-color: #dbeafe; }}
+  /* --- Layout --- */
+  .report-grid {{ display: grid; grid-template-columns: 1fr; gap: 20px; margin-top: 15px; }}
+  @media (min-width: 768px) {{ .report-grid {{ grid-template-columns: 1fr 1fr; }} }}
+  .scenario-card {{ background-color: #f9fafb; border: 1px solid #e5e7eb; padding: 15px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }}
+  .scenario-card h3 {{ color: #059669; font-size: 1.4em; margin: 0 0 10px 0; border-bottom: 2px solid #a7f3d0; padding-bottom: 5px; }}
+  .metric-group {{ display: grid; grid-template-columns: 1fr; gap: 10px; margin-bottom: 15px; }}
+  @media (min-width: 640px) {{ .metric-group {{ grid-template-columns: 1fr 1fr; }} }}
+  @media (min-width: 1024px) {{ .metric-group {{ grid-template-columns: 1fr 1fr 1fr; }} }}
+  .metric-item {{
+    display: flex; justify-content: space-between; align-items: center; background-color: #ffffff;
+    padding: 8px 12px; border-radius: 6px; border-left: 4px solid #fcd34d; font-size: 0.9em; box-shadow: 0 1px 2px rgba(0,0,0,0.03);
+  }}
+  .metric-key {{ color: #4b5563; font-weight: 500; }}
+  .metric-value {{ color: #1f2937; font-weight: 700; text-align: right; }}
+  .summary-card {{ background-color: #dbeafe; border: 2px solid #93c5fd; padding: 20px; margin-top: 30px; border-radius: 10px; }}
+  .summary-card h2 {{ color: #1e3a8a; font-size: 1.8em; margin: 0 0 15px 0; text-align: center; }}
+  .summary-item {{ display: flex; justify-content: space-between; padding: 5px 0; border-bottom: 1px dotted #93c5fd; }}
+  .summary-key {{ font-weight: 600; color: #1f2937; }}
+  .summary-value {{ font-weight: 700; }}
+  </style>
 </head>
 <body>
-    <div class="container">
-        <h1>Firmware Performance Analysis Comprehensive Report</h1>
-        {nav_bar}
-        {author_line}
-        {build_line}
-        <div class="report-grid">
-            {scenario_html}
-        </div>
-        {suite_summary_html}
-        {metric_summary_html}
+  <div class="container">
+    <h1>Firmware Performance Analysis Comprehensive Report</h1>
+    {nav_bar}
+    {author_line}
+    {build_line}
+    <div class="report-grid">
+      {scenario_html}
     </div>
+    {suite_summary_html}
+    {metric_summary_html}
+  </div>
 </body>
 </html>"""
         return html_output
@@ -428,15 +414,11 @@ class FirmwarePerformanceAnalyzer:
         return pass_count, fail_count, skip_count
 
 
-# -------------------------------------------------------------------
-# MAIN ENTRY
-# -------------------------------------------------------------------
-
+# -------------------- MAIN ENTRY --------------------
 def main():
     build_number = None
     if len(sys.argv) > 1:
         build_number = sys.argv[1]
-
     analyzer = FirmwarePerformanceAnalyzer(build_number=build_number)
     analyzer.analyze()
     analyzer.generate_reports()
