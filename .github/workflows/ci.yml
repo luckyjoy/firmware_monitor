@@ -2,8 +2,7 @@ name: Firmware Monitor CI
 
 on:
   push:
-    branches:
-      - main
+    branches: [ main ]
   workflow_dispatch:
 
 permissions:
@@ -16,44 +15,46 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  build_reports:
-    runs-on: ${{ matrix.os }}
-    strategy:
-      matrix:
-        os:
-          - ubuntu-latest
-          - windows-latest
+  build_ubuntu:
+    runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.10'
-
-      - name: Generate report (${{ matrix.os }})
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.10' }
+      - name: Generate report (ubuntu)
         shell: bash
         run: |
           set -euo pipefail
           python firmware_monitor.py ${{ github.run_number }}
-
-          # rename latest html with OS suffix
           LATEST="$(ls -t reports/*.html | head -n 1)"
-          if [ -z "$LATEST" ]; then
-            echo "::error::No report HTML found"; exit 1
-          fi
-          OS_SUFFIX="$(echo "${{ matrix.os }}" | tr '[:upper:]' '[:lower:]')"
-          mv "$LATEST" "reports/$(basename "$LATEST" .html)_${OS_SUFFIX}.html"
-
-      - name: Upload report artifact
+          mv "$LATEST" "reports/$(basename "$LATEST" .html)_ubuntu-latest.html"
+      - name: Upload report
         uses: actions/upload-artifact@v4
         with:
-          name: reports-${{ matrix.os }}
+          name: report-ubuntu
+          path: reports/
+
+  build_windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.10' }
+      - name: Generate report (windows)
+        shell: bash
+        run: |
+          set -euo pipefail
+          python firmware_monitor.py ${{ github.run_number }}
+          LATEST="$(ls -t reports/*.html | head -n 1)"
+          mv "$LATEST" "reports/$(basename "$LATEST" .html)_windows-latest.html"
+      - name: Upload report
+        uses: actions/upload-artifact@v4
+        with:
+          name: report-windows
           path: reports/
 
   publish_site:
-    needs: build_reports
+    needs: [ build_ubuntu, build_windows ]
     runs-on: ubuntu-latest
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     environment:
@@ -62,26 +63,18 @@ jobs:
     steps:
       - name: Checkout main
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-          path: repo
+        with: { fetch-depth: 0 }
 
-      # Download both OS artifacts into ./_new
-      - name: Download Ubuntu
+      - name: Download Ubuntu artifact
         uses: actions/download-artifact@v4
-        with:
-          name: reports-ubuntu-latest
-          path: _new/
-      - name: Download Windows
-        uses: actions/download-artifact@v4
-        with:
-          name: reports-windows-latest
-          path: _new/
+        with: { name: report-ubuntu, path: _new/ }
 
-      # Clone or initialize the archive branch (report_history) into ./_hist
-      - name: Prepare archive branch (report_history)
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Download Windows artifact
+        uses: actions/download-artifact@v4
+        with: { name: report-windows, path: _new/ }
+
+      - name: Prepare/clone archive branch (report_history)
+        env: { GH_TOKEN: ${{ secrets.GITHUB_TOKEN }} }
         shell: bash
         run: |
           set -euo pipefail
@@ -100,91 +93,55 @@ jobs:
             cd ..
           fi
 
-      # Build the site by merging old archive + new reports
-      - name: Build site
+      - name: Build site (merge archive + new reports)
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p _site/report_history
-
-          # 1) carry forward previous archive
+          # carry forward previous archive
           rsync -a --exclude='.git' --exclude='.github' _hist/ _site/report_history/ || true
-
-          # 2) add this run's reports
+          # add this run's reports
           shopt -s nullglob
-          cp -f _new/*_ubuntu-latest.html   _site/report_history/ 2>/dev/null || true
-          cp -f _new/*_windows-latest.html  _site/report_history/ 2>/dev/null || true
-
-          # 3) latest index.html at site root (prefer ubuntu)
+          cp -f _new/*_ubuntu-latest.html  _site/report_history/ 2>/dev/null || true
+          cp -f _new/*_windows-latest.html _site/report_history/ 2>/dev/null || true
+          # site root: latest ubuntu preferred
           UBU="$(ls -t _new/*_ubuntu-latest.html 2>/dev/null | head -n 1 || true)"
-          if [ -n "$UBU" ]; then
-            cp "$UBU" _site/index.html
-          else
-            ANY="$(ls -t _new/*.html 2>/dev/null | head -n 1 || true)"
-            [ -n "$ANY" ] && cp "$ANY" _site/index.html || { echo "::error::No HTML report to serve as index.html"; exit 1; }
-          fi
+          if [ -n "$UBU" ]; then cp "$UBU" _site/index.html
+          else ANY="$(ls -t _new/*.html 2>/dev/null | head -n 1 || true)"; [ -n "$ANY" ] && cp "$ANY" _site/index.html || { echo "::error::No HTML report for index"; exit 1; }; fi
 
       - name: Generate history index (safe HTML + Back link)
         shell: bash
         run: |
           set -euo pipefail
           HIST="_site/report_history"
-
-          # Build link list
           mapfile -t FILES < <(find "$HIST" -maxdepth 1 -type f -name 'firmware_analysis_report_*.html' | sort -r)
           LINKS=""
           for f in "${FILES[@]}"; do
             b="$(basename "$f")"
-            lab="$(echo "$b" \
-              | sed -E 's/^firmware_analysis_report_([0-9]{8})_([0-9]{6})(_[0-9]+)?_(.*)\.html$/Date: \1 Time: \2 Build: \3 OS: \4/' \
-              | sed 's/_//g' \
-              | sed 's/Build:  /Build: NA /')"
+            lab="$(echo "$b" | sed -E 's/^firmware_analysis_report_([0-9]{8})_([0-9]{6})(_[0-9]+)?_(.*)\.html$/Date: \1 Time: \2 Build: \3 OS: \4/' | sed 's/_//g' | sed 's/Build:  /Build: NA /')"
             LINKS="${LINKS}<li><a href=\"${b}\">${lab}</a></li>"
           done
-
-          # SINGLE-QUOTED heredoc prevents Bash from swallowing '<a'
           cat > "${HIST}/index.html" <<'HTML'
 <!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Report History</title>
-  <style>
-    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; margin: 2rem; color: #111827; }
-    a { color: #1d4ed8; text-decoration: none; }
-    a:hover { text-decoration: underline; }
-    .back { margin-bottom: 1rem; display: inline-block; }
-    h1 { margin: .2rem 0 1rem; }
-    ul { padding-left: 1.2rem; }
-    li { margin: .35rem 0; }
-    .note { margin-top: 1.5rem; color: #6b7280; font-size: .9rem; }
-  </style>
-</head>
-<body>
-  /firmware_monitor/← Back to Latest Report</a>
-  <h1>Archived Report History</h1>
-  <ul>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Report History</title>
+<style>body{font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;margin:2rem;color:#111827}a{color:#1d4ed8;text-decoration:none}a:hover{text-decoration:underline}.back{margin-bottom:1rem;display:inline-block}h1{margin:.2rem 0 1rem}ul{padding-left:1.2rem}li{margin:.35rem 0}.note{margin-top:1.5rem;color:#6b7280;font-size:.9rem}</style>
+/firmware_monitor/← Back to Latest Report</a>
+<h1>Archived Report History</h1>
+<ul>
 HTML
           printf '%s\n' "${LINKS}" >> "${HIST}/index.html"
-          cat >> "${HIST}/index.html" <<'HTML'
-  </ul>
-  <div class="note">All reports are archived here: /firmware_monitor/report_history/</div>
-</body>
-</html>
-HTML
-
-          # Ensure static hosting
+          echo '</ul><div class="note">All reports are archived here: /firmware_monitor/report_history/</div>' >> "${HIST}/index.html"
+          echo '</body></html>' >> "${HIST}/index.html"
           touch _site/.nojekyll
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v4
-        with:
-          path: _site/
+        with: { path: _site/ }
 
       - name: Commit archive back to report_history
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        env: { GH_TOKEN: ${{ secrets.GITHUB_TOKEN }} }
         shell: bash
         run: |
           set -euo pipefail
