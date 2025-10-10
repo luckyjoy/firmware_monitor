@@ -25,14 +25,9 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      # Removed: Set up Python, now using Docker
+      # Removed: Set up Python
 
-      # 1. Build the Docker Image locally on the runner
-      - name: Build Docker Image
-        # FIX: Explicitly specify platform to force Linux container on Windows runner
-        run: docker build --platform=linux/amd64 -t firmware-monitor-local .
-
-      # 2. Run the Report Generation inside the Docker Container
+      # 1. Run the Report Generation inside the Official Docker Container
       - name: Run Docker Report Generation (${{ matrix.os }})
         shell: bash
         run: |
@@ -44,15 +39,16 @@ jobs:
           # Get the absolute path for volume mounting (works for both OS shells)
           REPORTS_DIR="$(pwd)/reports"
           
-          # Run the script inside the container, mounting the host reports directory
+          # Use the base image directly, mounting the script and the reports folder.
           docker run \
             --rm \
+            --platform=linux/amd64 \
+            -v "$(pwd)/firmware_monitor.py:/app/firmware_monitor.py" \
             -v "${REPORTS_DIR}:/app/reports" \
-            firmware-monitor-local \
-            /usr/local/bin/python firmware_monitor.py ${{ github.run_number }}
+            python:3.10-slim \
+            /usr/local/bin/python /app/firmware_monitor.py ${{ github.run_number }}
           
           # Post-processing (renaming) remains on the host runner
-          # NOTE: Assuming firmware_monitor.py outputs its file into the mounted /app/reports
           LATEST="$(ls -t reports/*.html | head -n 1)"
           OS_SUFFIX="$(echo "${{ matrix.os }}" | tr '[:upper:]' '[:lower:]')"
           mv "$LATEST" "reports/$(basename "$LATEST" .html)_${OS_SUFFIX}.html"
