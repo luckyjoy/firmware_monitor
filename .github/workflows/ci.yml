@@ -79,13 +79,13 @@ jobs:
           echo "Listing files in ./reports directory:"
           ls -R reports/
 
-      - name: Merge reports and prepare site (Resilient)
+      - name: Merge reports and prepare site (Robust Index)
         shell: bash
         run: |
-          # The script is run, and if it fails to create the files, the pipeline won't crash.
-          python firmware_monitor.py || echo "Warning: firmware_monitor.py failed to generate summary reports (report.html). Proceeding with deployment."
+          # The script is run. If it fails to create the merged reports, the pipeline proceeds.
+          python firmware_monitor.py || echo "Warning: firmware_monitor.py failed to generate summary reports. Proceeding with deployment."
           
-          set -euo pipefail # Reinstate strict error handling after the Python call
+          set -euo pipefail # Reinstate strict error handling
           
           # 2) Setup site directory
           mkdir -p _site/report_history
@@ -93,18 +93,29 @@ jobs:
           LATEST_REPORT_HTML="reports/report.html"
           HISTORY_INDEX_HTML="reports/report_history.html"
 
-          # ⬇️ FIX: Use non-fatal file checks to copy only if files exist
+          # Prioritize merged report, but fallback to the ubuntu artifact for the index.
           if [ -f "$LATEST_REPORT_HTML" ]; then
             echo "Found main report. Copying to _site/index.html"
             cp "$LATEST_REPORT_HTML" _site/index.html
           else
-            echo "Error: Main report ($LATEST_REPORT_HTML) missing. Site index may be empty/old."
+            echo "ERROR: Merged report ($LATEST_REPORT_HTML) missing. Using fallback Ubuntu report."
+            # Find the most recently created individual report from Ubuntu artifact
+            FALLBACK_REPORT="$(ls -t reports/*_ubuntu-latest.html | head -n 1)"
+            
+            if [ -f "$FALLBACK_REPORT" ]; then
+                cp "$FALLBACK_REPORT" _site/index.html
+                echo "SUCCESS: Copied fallback report: $FALLBACK_REPORT to _site/index.html"
+            else
+                echo "CRITICAL ERROR: No fallback report found. Creating empty index page to prevent 404."
+                echo "<h1>Deployment Failed - Check Action Logs</h1>" > _site/index.html
+            fi
           fi
           
+          # History setup (only proceeds if the history file was created by the python script)
           if [ -f "$HISTORY_INDEX_HTML" ]; then
             echo "Found history report. Building site navigation."
             # 3) Copy all individual reports to the history folder
-            rsync -a --exclude='report.html' --exclude='report_history.html' reports/ _site/report_history/
+            rsync -a --delete --exclude='report.html' --exclude='report_history.html' reports/ _site/report_history/
             
             # 4) Get list of history links to inject into the history index page in _site
             LINKS="$(sed -n '/<ul/,/<\/ul>/p' reports/report_history.html | sed '1d;$d')"
@@ -114,7 +125,7 @@ jobs:
             echo "${LINKS}" >> _site/report_history/index.html
             echo '</ul><div class="note">All reports are archived here: <a href="https://luckyjoy.github.io/firmware_monitor/report_history/">https://luckyjoy.github.io/firmware_monitor/report_history/</a></div>' >> _site/report_history/index.html
           else
-            echo "Error: History report ($HISTORY_INDEX_HTML) missing. History page will be incomplete."
+            echo "Warning: History report ($HISTORY_INDEX_HTML) missing. History page will be incomplete."
           fi
           
           # 6) ensure static hosting
@@ -126,7 +137,6 @@ jobs:
         with:
           path: _site/
 
-      # This step provides the direct link you requested upon successful execution.
       - name: Report GitHub Pages URL
         run: |
           REPORT_URL="https://luckyjoy.github.io/firmware_monitor/"
