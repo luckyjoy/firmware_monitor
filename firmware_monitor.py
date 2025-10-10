@@ -161,10 +161,13 @@ def render_status_label(status):
 
 # -------------------- REPORT GENERATION --------------------
 class FirmwarePerformanceAnalyzer:
-    def __init__(self, build_number=None):
+    # ADDED is_merge_run parameter to control report generation flow
+    def __init__(self, build_number=None, is_merge_run=False):
+        # build_number is used for the report header, defaults to NA if not set
         self.build_number = build_number if build_number else "NA"
         self.scenarios = MOCK_LOG_DATA
         self.results = []
+        self.is_merge_run = is_merge_run # NEW: controls unique vs. merge report generation
 
     def analyze(self):
         for scenario in self.scenarios:
@@ -182,35 +185,34 @@ class FirmwarePerformanceAnalyzer:
 
         # Generate timestamps
         timestamp_raw = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-        
-        # --- FIX: Changed to local time (without tz info) ---
-        timestamp_human = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S Local Time")
-        
-        base_filename = f"firmware_analysis_report_{timestamp_raw}"
-        
-        # 1. Generate the uniquely named report (used in 'build_reports' job)
-        if self.build_number != "NA":
-            base_filename += f"_{self.build_number}"
+        timestamp_human = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S Local Time") # Local Time
 
-        txt_path = os.path.join(report_dir, base_filename + ".txt")
-        html_path = os.path.join(report_dir, base_filename + ".html")
-
-        with open(txt_path, "w", encoding="utf-8") as f:
-            f.write(self.generate_text_report(timestamp_raw, timestamp_human))
-
-        with open(html_path, "w", encoding="utf-8") as f:
-            f.write(self.generate_html_report(timestamp_raw, timestamp_human))
-
-        print(f"Reports generated:\n- {txt_path}\n- {html_path}")
-        
-        # 2. Generate the fixed-name merge reports (used in 'deploy' job)
-        if self.build_number == "NA":
+        # 1. Generate the fixed-name merge reports (used in 'deploy' job)
+        if self.is_merge_run:
             self._generate_merge_reports(report_dir, timestamp_raw, timestamp_human)
+        
+        # 2. Generate the uniquely named report (used in 'build_reports' job)
+        else:
+            base_filename = f"firmware_analysis_report_{timestamp_raw}"
+            # This check is now only for the unique file name suffix
+            if self.build_number != "NA":
+                base_filename += f"_{self.build_number}"
+
+            txt_path = os.path.join(report_dir, base_filename + ".txt")
+            html_path = os.path.join(report_dir, base_filename + ".html")
+
+            with open(txt_path, "w", encoding="utf-8") as f:
+                f.write(self.generate_text_report(timestamp_raw, timestamp_human))
+
+            with open(html_path, "w", encoding="utf-8") as f:
+                f.write(self.generate_html_report(timestamp_raw, timestamp_human))
+
+            print(f"Reports generated:\n- {txt_path}\n- {html_path}")
 
 
     def _generate_merge_reports(self, report_dir, timestamp_raw, timestamp_human):
         """Generates the required fixed-name reports: report.html and report_history.html"""
-        print("\nStarting generation of fixed-name reports for deployment...")
+        print("\nStarting generation of fixed-name reports for deployment (Merge Mode)...")
         
         # 1. Generate the main report (report.html)
         main_html_path = os.path.join(report_dir, "report.html")
@@ -474,16 +476,25 @@ class FirmwarePerformanceAnalyzer:
 
 # -------------------- MAIN ENTRY --------------------
 def main():
-    build_number = None
-    if len(sys.argv) > 1:
-        # 1. Try to get build number from command line argument (used in build_reports job)
-        build_number = sys.argv[1]
+    build_number_arg = None
+    is_merge_run = len(sys.argv) == 1 # TRUE if called as 'python script.py' (no args)
+
+    if not is_merge_run:
+        # If an argument is passed, use it (this is the unique report run)
+        build_number_arg = sys.argv[1]
     
-    # 2. Fallback to environment variable if argument is missing (for CI robustness)
-    if not build_number or build_number == "NA":
-        build_number = os.getenv('BUILD_NUM')
-        
-    analyzer = FirmwarePerformanceAnalyzer(build_number=build_number)
+    # Determine the final build number for the report header.
+    # If it's a merge run, try to get the build number from ENV for the header.
+    final_build_number = "NA"
+    if build_number_arg:
+        final_build_number = build_number_arg
+    elif is_merge_run:
+        # For the merge run, the header should still show the latest build number from the environment
+        env_build_num = os.getenv('BUILD_NUM')
+        if env_build_num:
+             final_build_number = env_build_num
+
+    analyzer = FirmwarePerformanceAnalyzer(build_number=final_build_number, is_merge_run=is_merge_run)
     analyzer.analyze()
     analyzer.generate_reports()
 

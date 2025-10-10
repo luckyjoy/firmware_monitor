@@ -33,10 +33,10 @@ jobs:
       - name: Generate report (${{ matrix.os }})
         shell: bash
         env:
-          BUILD_NUM: ${{ github.run_number }} # <--- NEW: Pass run number as environment variable
+          BUILD_NUM: ${{ github.run_number }}
         run: |
           set -euo pipefail
-          python firmware_monitor.py $BUILD_NUM # <-- Pass variable as argument
+          python firmware_monitor.py ${{ github.run_number }} # Pass run number as argument for unique report
 
           # rename latest html with OS suffix
           LATEST="$(ls -t reports/*.html | head -n 1)"
@@ -71,29 +71,25 @@ jobs:
           path: reports
           merge-multiple: true
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.10'
-
-      - name: 'Debug: List reports before merge'
-        run: |
-          echo "Listing files in ./reports directory:"
-          ls -R reports/
-
       - name: Merge reports and prepare site (Fully Resilient)
         shell: bash
         env:
-          # Define environment variables used in the run block
-          BUILD_NUM: ${{ github.run_number }}
+          BUILD_NUM: ${{ github.run_number }} # Still needed for python script's header and final sed
           
         run: |
-          # 1) Attempt to run the script. No build number argument is passed here, 
-          # which forces merge mode in firmware_monitor.py.
-          python firmware_monitor.py || echo "Warning: firmware_monitor.py failed to generate summary reports. Proceeding."
+          # --- NEW: Flatten the artifact directory structure for report history generation ---
+          echo "Flattening downloaded reports..."
+          find reports/ -mindepth 2 -name '*.html' -exec mv {} reports/ \;
+          find reports/ -mindepth 2 -name '*.txt' -exec mv {} reports/ \;
+          find reports/ -mindepth 1 -type d -delete 2>/dev/null || echo "Info: No artifact subdirs to delete."
           
-          # We manually check files later, so we can re-enable set -euo pipefail
-          set -euo pipefail 
+          # 1) Attempt to run the script. No argument passed means merge mode is forced in Python.
+          set +e # Temporarily disable exit on error for the python script call
+          python firmware_monitor.py 
+          if [ $? -ne 0 ]; then
+             echo "Warning: firmware_monitor.py failed to generate summary reports. Proceeding with manual file checks."
+          fi
+          set -e # Re-enable exit on error
           
           # 2) Setup site directory
           mkdir -p _site/report_history
@@ -106,23 +102,14 @@ jobs:
             echo "Found merged report. Copying to _site/index.html"
             cp "$LATEST_REPORT_HTML" _site/index.html
             
-            # --- NEW: Post-Processing to fix 'NA' and raw timestamp ---
-            # Generate a new, accurate human-readable timestamp for the deployment
-            HUMAN_DATE="$(date -u '+%Y-%m-%d %H:%M:%S UTC')"
-            
-            # Inject Build Number (replace 'Build Number: NA' with the actual run number)
-            # The python script now puts a human readable timestamp, so we ensure the NA is fixed.
+            # --- Post-Processing: Inject Build Number ---
+            # The python script generated the report header using BUILD_NUM env var, 
+            # but we use sed as a final safeguard to fix 'NA' if the logic failed.
             sed -i "s/Build Number: NA/Build Number: ${BUILD_NUM}/g" _site/index.html
-            
-            # The python script now uses the correct human date by default, but if the sed from above 
-            # failed for some reason, we ensure the date is current. 
-            # Note: This step is now redundant if the python script is fixed, but is a safe fallback.
-            # sed -i "s/Test Run Timestamp: [0-9]\{8\}_[0-9]\{6\}/Test Run Timestamp: ${HUMAN_DATE}/g" _site/index.html
-            
             echo "SUCCESS: Injected Run Number ($BUILD_NUM) into _site/index.html."
           else
             echo "ERROR: Merged report ($LATEST_REPORT_HTML) missing. Using fallback Ubuntu report."
-            # Find the most recently created individual report from Ubuntu artifact
+            # Fallback logic remains the same
             FALLBACK_REPORT="$(ls -t reports/*_ubuntu-latest.html | head -n 1)"
             
             if [ -f "$FALLBACK_REPORT" ]; then
@@ -135,6 +122,7 @@ jobs:
           fi
           
           # --- History (/report_history/) Setup ---
+          # This IF block will now correctly execute because the python script should have created report_history.html
           if [ -f "$HISTORY_INDEX_HTML" ]; then
             echo "Found history report. Building site navigation."
             # 3) Copy all individual reports to the history folder
@@ -149,7 +137,7 @@ jobs:
             echo '</ul><div class="note">All reports are archived here: <a href="https://luckyjoy.github.io/firmware_monitor/report_history/">https://luckyjoy.github.io/firmware_monitor/report_history/</a></div>' >> _site/report_history/index.html
           else
             echo "Warning: History report ($HISTORY_INDEX_HTML) missing. Creating placeholder history index page."
-            # Create a basic index page to prevent 404
+            # This is the original error message the user saw, but is now a true failure mode.
             echo '<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><title>Archived Report History - Error</title><link rel="stylesheet" href="../style.css"></head><body><a href="../index.html" class="back">← Back to Latest Report</a><h1>Archived Report History</h1><p>Failed to generate history links. Please check the logs for firmware_monitor.py to resolve the underlying bug.</p></body></html>' > _site/report_history/index.html
           fi
           
