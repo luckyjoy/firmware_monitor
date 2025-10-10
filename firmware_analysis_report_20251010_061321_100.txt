@@ -1,0 +1,73 @@
+Firmware Performance Analysis Report
+Author: Bang Thien Nguyen <ontario1998@gmail.com>
+Build Number: 100
+Test Run Timestamp: 2025-10-10 06:13:21 Local Time
+============================================================
+
+Scenario: Low Load Boot
+ Boot Timestamps: Min=100 Max=3000 Avg=1550 -> PASS
+ CPU (%): Min=4.8 Max=6.1 Avg=5.37 -> PASS
+ Latency (us): Min=250 Max=250 Avg=250 -> PASS
+ Memory (KB): Min=200 Max=205 Avg=202.5 -> PASS
+ Power (mW): Min=14 Max=15 Avg=14.5 -> PASS
+ Temperature (°C): Min=35.5 Max=36.1 Avg=35.8 -> PASS
+Scenario Status: PASS
+----------------------------------------
+
+Scenario: High Load Boot
+ Boot Timestamps: Min=50 Max=2100 Avg=1075 -> PASS
+ CPU (%): Min=15.0 Max=25.5 Avg=20.2 -> PASS
+ Latency (us): Min=550 Max=950 Avg=750 -> PASS
+ Memory (KB): Min=350 Max=380 Avg=365 -> PASS
+ Power (mW): Min=35 Max=35 Avg=35 -> PASS
+ Temperature (°C): Min=45.0 Max=50.0 Avg=47.5 -> PASS
+Scenario Status: PASS
+----------------------------------------
+
+Scenario: Power Dip
+ Boot Timestamps: Min=100 Max=7500 Avg=3800 -> PASS
+ CPU (%): Min=5.0 Max=15.0 Avg=10 -> PASS
+ Latency (us): Min=400 Max=400 Avg=400 -> PASS
+ Memory (KB): Not available -> SKIP
+ Power (mW): Min=18 Max=25 Avg=21 -> PASS
+ Temperature (°C): Min=35.0 Max=38.0 Avg=36.5 -> PASS
+Scenario Status: MIXED
+----------------------------------------
+
+Scenario: Resource Contention
+ Boot Timestamps: Min=100 Max=4500 Avg=2300 -> PASS
+ CPU (%): Min=8.0 Max=95.0 Avg=50.75 -> PASS
+ Latency (us): Min=7500 Max=7500 Avg=7500 -> FAIL
+ Memory (KB): Min=300 Max=950 Avg=625 -> PASS
+ Power (mW): Min=20 Max=150 Avg=65 -> PASS
+ Temperature (°C): Min=38.0 Max=99.0 Avg=60.67 -> PASS
+Scenario Status: MIXED
+----------------------------------------
+
+Scenario: Thermal Stress
+ Boot Timestamps: Min=500 Max=7000 Avg=4000 -> PASS
+ CPU (%): Min=10 Max=90 Avg=60 -> PASS
+ Latency (us): Min=1000 Max=6000 Avg=4000 -> PASS
+ Memory (KB): Min=600 Max=950 Avg=800 -> PASS
+ Power (mW): Min=50 Max=120 Avg=90 -> PASS
+ Temperature (°C): Min=60 Max=100 Avg=90 -> FAIL
+Scenario Status: MIXED
+----------------------------------------
+
+Scenario: Recovery
+ Boot Timestamps: Min=100 Max=5000 Avg=3000 -> PASS
+ CPU (%): Min=2 Max=15 Avg=8 -> PASS
+ Latency (us): Min=500 Max=2000 Avg=1200 -> PASS
+ Memory (KB): Not available -> SKIP
+ Power (mW): Min=15 Max=40 Avg=20 -> PASS
+ Temperature (°C): Min=30 Max=40 Avg=35 -> PASS
+Scenario Status: MIXED
+----------------------------------------
+
+SUMMARY (Test Suites)
+Total Test Suites: 6
+PASS: 2 (33.33%), FAIL: 0, MIXED: 4, SKIP: 0
+
+SUMMARY (Individual Tests)
+Total Individual Tests: 36
+PASS: 32 (88.89%), FAIL: 2, SKIP: 2
