@@ -162,7 +162,6 @@ def render_status_label(status):
 # -------------------- REPORT GENERATION --------------------
 class FirmwarePerformanceAnalyzer:
     def __init__(self, build_number=None):
-        # build_number is now set via main() logic
         self.build_number = build_number if build_number else "NA"
         self.scenarios = MOCK_LOG_DATA
         self.results = []
@@ -183,8 +182,9 @@ class FirmwarePerformanceAnalyzer:
 
         # Generate timestamps
         timestamp_raw = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-        # Use UTC for consistency across build agents
-        timestamp_human = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC") 
+        
+        # --- FIX: Changed to local time (without tz info) ---
+        timestamp_human = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S Local Time")
         
         base_filename = f"firmware_analysis_report_{timestamp_raw}"
         
@@ -205,9 +205,6 @@ class FirmwarePerformanceAnalyzer:
         
         # 2. Generate the fixed-name merge reports (used in 'deploy' job)
         if self.build_number == "NA":
-            # The deploy job does not have a build number argument, forcing NA here.
-            # This triggers the file generation for report.html and report_history.html,
-            # which are fixed up by the CI using sed to inject the BUILD_NUM.
             self._generate_merge_reports(report_dir, timestamp_raw, timestamp_human)
 
 
@@ -271,16 +268,43 @@ class FirmwarePerformanceAnalyzer:
         lines.append("Firmware Performance Analysis Report")
         lines.append(f"Author: Bang Thien Nguyen <ontario1998@gmail.com>")
         lines.append(f"Build Number: {self.build_number}")
-        lines.append(f"Test Run Timestamp: {timestamp_human}") # Use human-readable time
+        lines.append(f"Test Run Timestamp: {timestamp_human}")
         lines.append("=" * 60)
-        # ... (rest of the function remains the same, using timestamp_human)
-        # ... (all summary logic remains the same)
-        # ... (snip)
+
+        for result in self.results:
+            lines.append(f"\nScenario: {result['scenario']}")
+            for metric, status in sorted(result["metric_status"].items()):
+                values = result["metrics"].get(metric)
+                if values:
+                    lines.append(
+                        f" {metric}: Min={values['min']} "
+                        f"Max={values['max']} "
+                        f"Avg={values['avg']} -> {status}"
+                    )
+                else:
+                    lines.append(f" {metric}: Not available -> {status}")
+
+            lines.append(f"Scenario Status: {result['scenario_status']}")
+            lines.append("-" * 40)
+
+        suite_pass, suite_fail, suite_mixed, suite_skip = self._get_suite_summary_counts()
+        total_suites = len(self.results)
+        suite_pass_percent = (suite_pass / total_suites * 100) if total_suites > 0 else 0
+        lines.append("\nSUMMARY (Test Suites)")
+        lines.append(f"Total Test Suites: {total_suites}")
+        lines.append(f"PASS: {suite_pass} ({suite_pass_percent:.2f}%), FAIL: {suite_fail}, MIXED: {suite_mixed}, SKIP: {suite_skip}")
+
+        metric_pass, metric_fail, metric_skip = self._get_metric_summary_counts()
+        total_metrics = metric_pass + metric_fail + metric_skip
+        metric_pass_percent = (metric_pass / total_metrics * 100) if total_metrics > 0 else 0
+        lines.append("\nSUMMARY (Individual Tests)")
+        lines.append(f"Total Individual Tests: {total_metrics}")
+        lines.append(f"PASS: {metric_pass} ({metric_pass_percent:.2f}%), FAIL: {metric_fail}, SKIP: {metric_skip}")
+
         return "\n".join(lines)
 
 
     def generate_html_report(self, timestamp_raw, timestamp_human):
-        # Function signature changed to accept both timestamps
         author_line = f"<div class='author-info'>Author: Bang Thien Nguyen &lt;<a href='mailto:ontario1998@gmail.com'>ontario1998@gmail.com</a>&gt;</div>"
         
         # Use human-readable timestamp here
@@ -292,9 +316,69 @@ class FirmwarePerformanceAnalyzer:
           <a class="nav-link nav-link-history" href="{HISTORY_URL}">Report History</a>
         </div>
         """
-        # ... (rest of the function remains the same)
-        # ... (snip)
         
+        scenario_html = ""
+        for result in self.results:
+            metric_html = ""
+            for metric, status in sorted(result["metric_status"].items()):
+                values = result["metrics"].get(metric)
+                status_label = render_status_label(status)
+                if values:
+                    metric_html += f"""
+                    <div class="metric-item">
+                      <span class="metric-key">{metric}</span>
+                      <span class="metric-value">Min: {values['min']} &nbsp; Max: {values['max']} &nbsp; Avg: {values['avg']} → {status_label}</span>
+                    </div>
+                    """
+                else:
+                    metric_html += f"""
+                    <div class="metric-item">
+                      <span class="metric-key">{metric}</span>
+                      <span class="metric-value">Not available → {status_label}</span>
+                    </div>
+                    """
+
+            status_color = STATUS_COLORS.get(result['scenario_status'], '#000')
+            scenario_status_label = render_status_label(result['scenario_status'])
+            scenario_html += f"""
+            <div class="scenario-card">
+              <h3>{result['scenario']}</h3>
+              <div class="metric-group">
+                {metric_html}
+              </div>
+              <div class="test-result" style="border-left: 4px solid {status_color}; background:#f9fafb; padding:8px; margin-top:10px;">
+                Scenario Status: {scenario_status_label}
+              </div>
+            </div>
+            """
+
+        suite_pass, suite_fail, suite_mixed, suite_skip = self._get_suite_summary_counts()
+        total_suites = len(self.results)
+        suite_pass_percent = (suite_pass / total_suites * 100) if total_suites > 0 else 0
+        suite_summary_html = f"""
+        <div class="summary-card">
+          <h2>Overall Summary (Test Suites)</h2>
+          <div class="summary-item"><span class="summary-key">Total Test Suites</span><span class="summary-value">{total_suites}</span></div>
+          <div class="summary-item"><span class="summary-key">PASS</span><span class="summary-value" style="color:{STATUS_COLORS['PASS']};">{suite_pass} ({suite_pass_percent:.2f}%)</span></div>
+          <div class="summary-item"><span class="summary-key">FAIL</span><span class="summary-value" style="color:{STATUS_COLORS['FAIL']};">{suite_fail}</span></div>
+          <div class="summary-item"><span class="summary-key">MIXED</span><span class="summary-value" style="color:{STATUS_COLORS['MIXED']};">{suite_mixed}</span></div>
+          <div class="summary-item"><span class="summary-key">SKIP</span><span class="summary-value" style="color:{STATUS_COLORS['SKIP']};">{suite_skip}</span></div>
+        </div>
+        """
+
+        metric_pass, metric_fail, metric_skip = self._get_metric_summary_counts()
+        total_metrics = metric_pass + metric_fail + metric_skip
+        metric_pass_percent = (metric_pass / total_metrics * 100) if total_metrics > 0 else 0
+        metric_summary_html = f"""
+        <div class="summary-card" style="background-color: #e0f2fe; border-color: #7dd3fc; margin-top: 20px;">
+          <h2>Overall Summary (Individual Tests)</h2>
+          <div class="summary-item"><span class="summary-key">Total Individual Tests</span><span class="summary-value">{total_metrics}</span></div>
+          <div class="summary-item"><span class="summary-key">PASS</span><span class="summary-value" style="color:{STATUS_COLORS['PASS']};">{metric_pass} ({metric_pass_percent:.2f}%)</span></div>
+          <div class="summary-item"><span class="summary-key">FAIL</span><span class="summary-value" style="color:{STATUS_COLORS['FAIL']};">{metric_fail}</span></div>
+          <div class="summary-item"><span class="summary-key">SKIP</span><span class="summary-value" style="color:{STATUS_COLORS['SKIP']};">{metric_skip}</span></div>
+        </div>
+        """
+
         html_output = f"""<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -396,11 +480,9 @@ def main():
         build_number = sys.argv[1]
     
     # 2. Fallback to environment variable if argument is missing (for CI robustness)
-    if not build_number or build_number == "NA": # Check for "NA" to ensure the fallback works
+    if not build_number or build_number == "NA":
         build_number = os.getenv('BUILD_NUM')
         
-    # If build_number is still None, it defaults to "NA" in the class constructor,
-    # which is the desired behavior for the merge report trigger.
     analyzer = FirmwarePerformanceAnalyzer(build_number=build_number)
     analyzer.analyze()
     analyzer.generate_reports()
