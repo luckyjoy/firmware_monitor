@@ -79,13 +79,14 @@ jobs:
           echo "Listing files in ./reports directory:"
           ls -R reports/
 
-      - name: Merge reports and prepare site (Robust Index)
+      - name: Merge reports and prepare site (Fully Resilient)
         shell: bash
         run: |
-          # The script is run. If it fails to create the merged reports, the pipeline proceeds.
-          python firmware_monitor.py || echo "Warning: firmware_monitor.py failed to generate summary reports. Proceeding with deployment."
+          # 1) Attempt to run the script. It's expected to fail due to the bug, but we proceed.
+          python firmware_monitor.py || echo "Warning: firmware_monitor.py failed to generate summary reports. Proceeding."
           
-          set -euo pipefail # Reinstate strict error handling
+          # We manually check files later, so we can re-enable set -euo pipefail
+          set -euo pipefail 
           
           # 2) Setup site directory
           mkdir -p _site/report_history
@@ -93,9 +94,9 @@ jobs:
           LATEST_REPORT_HTML="reports/report.html"
           HISTORY_INDEX_HTML="reports/report_history.html"
 
-          # Prioritize merged report, but fallback to the ubuntu artifact for the index.
+          # --- Main Index (Root /) Setup ---
           if [ -f "$LATEST_REPORT_HTML" ]; then
-            echo "Found main report. Copying to _site/index.html"
+            echo "Found merged report. Copying to _site/index.html"
             cp "$LATEST_REPORT_HTML" _site/index.html
           else
             echo "ERROR: Merged report ($LATEST_REPORT_HTML) missing. Using fallback Ubuntu report."
@@ -106,12 +107,12 @@ jobs:
                 cp "$FALLBACK_REPORT" _site/index.html
                 echo "SUCCESS: Copied fallback report: $FALLBACK_REPORT to _site/index.html"
             else
-                echo "CRITICAL ERROR: No fallback report found. Creating empty index page to prevent 404."
-                echo "<h1>Deployment Failed - Check Action Logs</h1>" > _site/index.html
+                echo "CRITICAL ERROR: No fallback report found. Creating error index page."
+                echo "<h1>Deployment Failed - Check Action Logs</h1><p>The Python script failed to generate any reports. Check build_reports logs.</p>" > _site/index.html
             fi
           fi
           
-          # History setup (only proceeds if the history file was created by the python script)
+          # --- History (/report_history/) Setup ---
           if [ -f "$HISTORY_INDEX_HTML" ]; then
             echo "Found history report. Building site navigation."
             # 3) Copy all individual reports to the history folder
@@ -125,7 +126,9 @@ jobs:
             echo "${LINKS}" >> _site/report_history/index.html
             echo '</ul><div class="note">All reports are archived here: <a href="https://luckyjoy.github.io/firmware_monitor/report_history/">https://luckyjoy.github.io/firmware_monitor/report_history/</a></div>' >> _site/report_history/index.html
           else
-            echo "Warning: History report ($HISTORY_INDEX_HTML) missing. History page will be incomplete."
+            echo "Warning: History report ($HISTORY_INDEX_HTML) missing. Creating placeholder history index page."
+            # Create a basic index page to prevent 404
+            echo '<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><title>Archived Report History - Error</title><link rel="stylesheet" href="../style.css"></head><body><a href="../index.html" class="back">← Back to Latest Report</a><h1>Archived Report History</h1><p>Failed to generate history links. Please check the logs for firmware_monitor.py to resolve the underlying bug.</p></body></html>' > _site/report_history/index.html
           fi
           
           # 6) ensure static hosting
