@@ -10,14 +10,12 @@ permissions:
   contents: write
   pages: write
   id-token: write
-  packages: write
 
 concurrency:
   group: pages
   cancel-in-progress: true
 
 jobs:
-  # --- Stage 1: Run Tests on Matrix and Generate Reports ---
   test_and_prepare:
     runs-on: ${{ matrix.os }}
     strategy:
@@ -37,12 +35,10 @@ jobs:
           python-version: '3.10'
 
       - name: Run Analysis Script & Rename Report (${{ matrix.os }})
-        id: generate_report
         shell: bash
         run: |
           set -euo pipefail
-
-          # Generate reports (pass the run number as build id)
+          # Generate reports with run number as build ID
           python firmware_monitor.py ${{ github.run_number }}
 
           # Find the latest HTML produced by the script
@@ -52,7 +48,7 @@ jobs:
             exit 1
           fi
 
-          # Normalize the OS suffix and rename the file for uniqueness
+          # Rename with OS suffix for uniqueness
           OS_SUFFIX="$(echo "${{ matrix.os }}" | tr '[:upper:]' '[:lower:]')"
           BASE_NAME="$(basename "${LATEST_REPORT_PATH}" .html)"
           NEW_FILENAME="${BASE_NAME}_${OS_SUFFIX}.html"
@@ -65,95 +61,71 @@ jobs:
           name: analysis-reports-${{ matrix.os }}
           path: reports/
 
-  # --- Stage 2: Merge History, Build Pages, Deploy ---
   build_and_deploy:
     needs: test_and_prepare
     runs-on: ubuntu-latest
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    env:
-      SITE_BASE_PATH: /firmware_monitor/
     steps:
-      - name: Checkout MAIN into ./main
+      - name: Checkout main
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          path: main
 
+      # Pull any existing history branch contents into ./history
+      - name: Checkout report_history (if exists)
+        id: history
+        continue-on-error: true
+        uses: actions/checkout@v4
+        with:
+          ref: report_history
+          path: history
+          fetch-depth: 1
+
+      # Download both OS artifacts into ./reports
       - name: Download Windows Reports Artifact
         uses: actions/download-artifact@v4
         with:
           name: analysis-reports-windows-latest
-          path: main/reports/
+          path: reports/
 
       - name: Download Ubuntu Reports Artifact
         uses: actions/download-artifact@v4
         with:
           name: analysis-reports-ubuntu-latest
-          path: main/reports/
+          path: reports/
 
-      - name: Build latest index.html (root)
+      - name: Merge history + new reports and build pages
         shell: bash
-        working-directory: main
         run: |
           set -euo pipefail
-          mkdir -p reports
-          # Prefer Ubuntu as latest; fallback to any html
-          LATEST_UBUNTU="$(ls -t reports/*_ubuntu-latest.html 2>/dev/null | head -n 1 || true)"
-          if [ -n "$LATEST_UBUNTU" ]; then
-            cp "$LATEST_UBUNTU" reports/index.html
+
+          mkdir -p reports/report_history
+
+          echo "== Copy existing history from branch root =="
+          if [ -d history ]; then
+            shopt -s dotglob nullglob
+            cp -a history/* reports/report_history/ || true
+            rm -rf reports/report_history/.git || true
+          else
+            echo "No history dir (first run or branch missing)."
+          fi
+
+          echo "== Add new reports from this run =="
+          shopt -s nullglob
+          cp -f reports/*_ubuntu-latest.html  reports/report_history/ 2>/dev/null || true
+          cp -f reports/*_windows-latest.html reports/report_history/ 2>/dev/null || true
+
+          echo "== Choose latest (Ubuntu preferred) for site root =="
+          LATEST_UBU="$(ls -t reports/*_ubuntu-latest.html 2>/dev/null | head -n 1 || true)"
+          if [ -n "$LATEST_UBU" ]; then
+            cp "$LATEST_UBU" reports/index.html
           else
             ANY_HTML="$(ls -t reports/*.html 2>/dev/null | head -n 1 || true)"
-            [ -n "$ANY_HTML" ] && cp "$ANY_HTML" reports/index.html || { echo "::error::No HTML report to serve as index.html"; exit 1; }
+            [ -n "$ANY_HTML" ] && cp "$ANY_HTML" reports/index.html || { echo "::error::No HTML to serve as index.html"; exit 1; }
           fi
 
-      - name: Prepare worktree for report_history
-        shell: bash
-        working-directory: main
-        run: |
-          set -euo pipefail
-          git config user.name  "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-
-          # If history branch is missing, initialize it (clean root)
-          if ! git ls-remote --exit-code --heads origin report_history >/dev/null 2>&1; then
-            git switch --orphan report_history
-            rm -rf .
-            echo "<!doctype html><title>Report History</title>" > index.html
-            git add -A
-            git commit -m "init report_history"
-            git push origin report_history
-            git switch -C main
-          fi
-
-          git fetch origin report_history:report_history
-          # Add a separate worktree folder just for the history branch
-          git worktree add ../history_wt report_history
-
-      - name: Merge existing history + new reports
-        shell: bash
-        run: |
-          set -euo pipefail
-          mkdir -p main/reports/report_history
-
-          echo "== Copy FROM history branch to staging =="
-          rsync -a --exclude='.git' --exclude='.github' history_wt/ main/reports/report_history/
-
-          echo "== Copy IN new reports from this run =="
-          shopt -s nullglob
-          cp -f main/reports/*_ubuntu-latest.html  main/reports/report_history/ 2>/dev/null || true
-          cp -f main/reports/*_windows-latest.html main/reports/report_history/ 2>/dev/null || true
-
-          echo "== Totals after merge =="
-          echo "HTML count: $(ls -1 main/reports/report_history/*.html 2>/dev/null | wc -l)"
-
-      - name: Generate history index (HTML with absolute Back link)
-        shell: bash
-        run: |
-          set -euo pipefail
-          BASE="/firmware_monitor/"
-          HIST="main/reports/report_history"
-
-          mapfile -t FILES < <(find "$HIST" -maxdepth 1 -type f -name 'firmware_analysis_report_*.html' | sort -r)
+          echo "== Build history index page from template =="
+          mapfile -t FILES < <(find reports/report_history -maxdepth 1 -type f -name 'firmware_analysis_report_*.html' | sort -r)
           LINKS=""
           for f in "${FILES[@]}"; do
             b="$(basename "$f")"
@@ -164,58 +136,35 @@ jobs:
             LINKS+="<li><a href=\"$b\">$label</a></li>"
           done
 
-          cat > "$HIST/index.html" <<HTML
-<!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8" />
-  <title>Report History</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <style>
-    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; margin: 2rem; color: #111827; }
-    a { color: #1d4ed8; text-decoration: none; }
-    a:hover { text-decoration: underline; }
-    .back { margin-bottom: 1rem; display: inline-block; }
-    h1 { color: #111827; margin: 0.2rem 0 1rem; }
-    ul { padding-left: 1.2rem; }
-    li { margin: 0.35rem 0; }
-    .note { margin-top: 1.5rem; color: #6b7280; font-size: 0.9rem; }
-  </style>
-</head>
-<body>
-  ${BASE}← Back to Latest Report</a>
-  <h1>Archived Report History</h1>
-  <ul>
-    ${LINKS}
-  </ul>
-  <div class="note">All reports are archived here: ${BASE}report_history/</div>
-</body>
-</html>
-HTML
-
-          # Ensure Pages treats this as static site
-          touch main/reports/.nojekyll
-
-      - name: Commit & push updated history branch
-        shell: bash
-        run: |
-          set -euo pipefail
-          # Sync merged history into the branch worktree root
-          rsync -a --delete main/reports/report_history/ history_wt/
-
-          cd history_wt
-          git add -A
-          if ! git diff --cached --quiet; then
-            git commit -m "Add reports from run ${GITHUB_RUN_NUMBER}"
-            git push origin HEAD:report_history
+          if [ -f history_template.html ]; then
+            sed "s|{{HISTORY_LINKS}}|$LINKS|g" history_template.html > reports/report_history/index.html
           else
-            echo "No changes to commit to report_history."
+            # Minimal fallback if template missing
+            {
+              echo '<!doctype html><meta charset="utf-8">'
+              echo '<title>Report History</title>'
+              echo '/firmware_monitor/← Back to Latest Report</a>'
+              echo '<h1>Archived Report History</h1><ul>'
+              echo "$LINKS"
+              echo '</ul><div class="note">All reports are archived here: /firmware_monitor/report_history/</div>'
+            } > reports/report_history/index.html
           fi
 
-      - name: Upload Pages artifact (full merged history)
+          # Ensure static hosting (no Jekyll processing)
+          touch reports/.nojekyll
+
+      - name: Upload Pages artifact (merged history)
         uses: actions/upload-pages-artifact@v4
         with:
-          path: 'main/reports/'
+          path: 'reports/'
+
+      - name: Push Combined History Back to report_history branch
+        uses: ad-m/github-push-action@master
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          directory: reports/report_history
+          branch: report_history
+          force: false
 
       - name: Deploy to GitHub Pages
         id: deployment
