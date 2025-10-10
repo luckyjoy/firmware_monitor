@@ -1,3 +1,4 @@
+# Please use this clean, complete YAML content
 name: Firmware Monitor CI
 
 'on':
@@ -101,7 +102,7 @@ jobs:
           cp "$HISTORY_INDEX_HTML" _site/report_history/index.html
           
           # 3) Copy all individual reports to the history folder
-          rsync -a --exclude 'report.html' --exclude 'report_history.html' reports/ _site/report_history/
+          rsync -a --delete --exclude='report.html' --exclude='report_history.html' reports/ _site/report_history/
           
           # 4) Get list of history links to inject into the history index page in _site
           # This assumes the report history links follow the pattern:
