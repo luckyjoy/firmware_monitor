@@ -47,12 +47,10 @@ jobs:
           name: reports-${{ matrix.os }}
           path: reports
 
-  # ⬇️ RENAMED JOB: publish_site is now deploy
   deploy:
     needs: build_reports
     runs-on: ubuntu-latest
     steps:
-      # Checkout steps remain the same to ensure correct paths
       - name: Checkout main branch
         uses: actions/checkout@v4
         with:
@@ -87,7 +85,6 @@ jobs:
           set -euo pipefail
           
           # 1) Re-run the script with all reports to generate a combined history report
-          # If this fails, the problem is in your firmware_monitor.py script's logic
           python firmware_monitor.py 
           
           # 2) Copy the final merged report and history index to the site root
@@ -125,7 +122,6 @@ jobs:
         with:
           path: _site/
 
-      # ✅ This step provides the direct link you requested upon successful execution.
       - name: Report GitHub Pages URL
         run: |
           REPORT_URL="https://luckyjoy.github.io/firmware_monitor/"
