@@ -182,6 +182,8 @@ class FirmwarePerformanceAnalyzer:
 
         timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
         base_filename = f"firmware_analysis_report_{timestamp}"
+        
+        # 1. Generate the uniquely named report (used in 'build_reports' job)
         if self.build_number != "NA":
             base_filename += f"_{self.build_number}"
 
@@ -195,6 +197,68 @@ class FirmwarePerformanceAnalyzer:
             f.write(self.generate_html_report(timestamp))
 
         print(f"Reports generated:\n- {txt_path}\n- {html_path}")
+        
+        # 2. Generate the fixed-name merge reports (used in 'deploy' job)
+        if self.build_number == "NA":
+            self._generate_merge_reports(report_dir, timestamp)
+
+
+    def _generate_merge_reports(self, report_dir, timestamp):
+        """Generates the required fixed-name reports: report.html and report_history.html"""
+        print("\nStarting generation of fixed-name reports for deployment...")
+        
+        # 1. Generate the main report (report.html)
+        # Use the newly generated analysis report content for the "latest" page
+        main_html_path = os.path.join(report_dir, "report.html")
+        with open(main_html_path, "w", encoding="utf-8") as f:
+            f.write(self.generate_html_report(timestamp))
+        print(f"Generated: {main_html_path}")
+
+        # 2. Generate the history list page (report_history.html)
+        history_html_path = os.path.join(report_dir, "report_history.html")
+        history_content = self._generate_history_html(report_dir)
+        with open(history_html_path, "w", encoding="utf-8") as f:
+            f.write(history_content)
+        print(f"Generated: {history_html_path}")
+
+        print("Fixed-name reports successfully generated.")
+        
+    def _generate_history_html(self, report_dir):
+        """Scans the reports directory and generates the list HTML for report_history.html."""
+        
+        # Find all individual reports (excluding the fixed-name merge reports)
+        all_reports = sorted([f for f in os.listdir(report_dir) 
+                              if f.endswith(".html") and not f.startswith("report")], 
+                              reverse=True)
+        
+        list_items = []
+        for filename in all_reports:
+            # The reports are copied to /report_history/ in the CI, so the link must reflect that
+            link_path = filename 
+            
+            # Extract timestamp/info for display
+            display_name = filename.replace("firmware_analysis_report_", "").replace(".html", "")
+            
+            list_items.append(f'<li><a href="./{link_path}">{display_name}</a></li>')
+
+        history_list = "\n".join(list_items)
+        
+        # This minimal HTML is designed to be read by the CI script to extract the <ul> contents
+        history_html = f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Report History List Source</title>
+</head>
+<body>
+  <div style="display:none;">This is the source for the history list, used by the deploy script.</div>
+  <ul>
+    {history_list}
+  </ul>
+</body>
+</html>"""
+        return history_html
+
 
     def generate_text_report(self, timestamp):
         lines = []
