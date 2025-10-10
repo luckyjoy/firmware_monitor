@@ -1,26 +1,149 @@
-- name: Generate history index (safe HTML with absolute Back link)
+name: Firmware Monitor CI
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build_reports:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os:
+          - ubuntu-latest
+          - windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Generate report (${{ matrix.os }})
         shell: bash
         run: |
           set -euo pipefail
+          python firmware_monitor.py ${{ github.run_number }}
 
-          # Detect your site output directory
-          if [ -d "site_out" ]; then SITE_DIR="site_out"; else SITE_DIR="_site"; fi
-          HIST_DIR="${SITE_DIR}/report_history"
+          # rename latest html with OS suffix
+          LATEST="$(ls -t reports/*.html | head -n 1)"
+          if [ -z "$LATEST" ]; then
+            echo "::error::No report HTML found"; exit 1
+          fi
+          OS_SUFFIX="$(echo "${{ matrix.os }}" | tr '[:upper:]' '[:lower:]')"
+          mv "$LATEST" "reports/$(basename "$LATEST" .html)_${OS_SUFFIX}.html"
+
+      - name: Upload report artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: reports-${{ matrix.os }}
+          path: reports/
+
+  publish_site:
+    needs: build_reports
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          path: repo
+
+      # Download both OS artifacts into ./_new
+      - name: Download Ubuntu
+        uses: actions/download-artifact@v4
+        with:
+          name: reports-ubuntu-latest
+          path: _new/
+      - name: Download Windows
+        uses: actions/download-artifact@v4
+        with:
+          name: reports-windows-latest
+          path: _new/
+
+      # Clone or initialize the archive branch (report_history) into ./_hist
+      - name: Prepare archive branch (report_history)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf _hist
+          if git ls-remote --exit-code --heads "https://github.com/${GITHUB_REPOSITORY}.git" report_history >/dev/null 2>&1; then
+            git clone --depth 1 --branch report_history "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" _hist
+          else
+            git clone --depth 1 "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" _hist
+            cd _hist
+            git switch --orphan report_history
+            rm -rf ./*
+            echo "<!doctype html><title>Report History</title>" > index.html
+            git add -A
+            git -c user.name='github-actions[bot]' -c user.email='github-actions[bot]@users.noreply.github.com' commit -m "init report_history"
+            git push -u origin report_history
+            cd ..
+          fi
+
+      # Build the site by merging old archive + new reports
+      - name: Build site
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p _site/report_history
+
+          # 1) carry forward previous archive
+          rsync -a --exclude='.git' --exclude='.github' _hist/ _site/report_history/ || true
+
+          # 2) add this run's reports
+          shopt -s nullglob
+          cp -f _new/*_ubuntu-latest.html   _site/report_history/ 2>/dev/null || true
+          cp -f _new/*_windows-latest.html  _site/report_history/ 2>/dev/null || true
+
+          # 3) latest index.html at site root (prefer ubuntu)
+          UBU="$(ls -t _new/*_ubuntu-latest.html 2>/dev/null | head -n 1 || true)"
+          if [ -n "$UBU" ]; then
+            cp "$UBU" _site/index.html
+          else
+            ANY="$(ls -t _new/*.html 2>/dev/null | head -n 1 || true)"
+            [ -n "$ANY" ] && cp "$ANY" _site/index.html || { echo "::error::No HTML report to serve as index.html"; exit 1; }
+          fi
+
+      - name: Generate history index (safe HTML + Back link)
+        shell: bash
+        run: |
+          set -euo pipefail
+          HIST="_site/report_history"
 
           # Build link list
-          mapfile -t FILES < <(find "$HIST_DIR" -maxdepth 1 -type f -name 'firmware_analysis_report_*.html' | sort -r)
+          mapfile -t FILES < <(find "$HIST" -maxdepth 1 -type f -name 'firmware_analysis_report_*.html' | sort -r)
           LINKS=""
           for f in "${FILES[@]}"; do
             b="$(basename "$f")"
-            label="$(echo "$b" \
+            lab="$(echo "$b" \
               | sed -E 's/^firmware_analysis_report_([0-9]{8})_([0-9]{6})(_[0-9]+)?_(.*)\.html$/Date: \1 Time: \2 Build: \3 OS: \4/' \
               | sed 's/_//g' \
               | sed 's/Build:  /Build: NA /')"
-            LINKS="${LINKS}<li><a href=\"${b}\">${label}</a></li>"
+            LINKS="${LINKS}<li><a href=\"${b}\">${lab}</a></li>"
           done
 
-          # Write a full HTML file using a SINGLE-QUOTED heredoc
-          cat > "${HIST_DIR}/index.html" <<'HTML'
+          # SINGLE-QUOTED heredoc prevents Bash from swallowing '<a'
+          cat > "${HIST}/index.html" <<'HTML'
 <!doctype html>
 <html lang="en">
 <head>
@@ -43,12 +166,8 @@
   <h1>Archived Report History</h1>
   <ul>
 HTML
-
-          # Append the dynamic links safely
-          printf '%s\n' "${LINKS}" >> "${HIST_DIR}/index.html"
-
-          # Close out the HTML
-          cat >> "${HIST_DIR}/index.html" <<'HTML'
+          printf '%s\n' "${LINKS}" >> "${HIST}/index.html"
+          cat >> "${HIST}/index.html" <<'HTML'
   </ul>
   <div class="note">All reports are archived here: /firmware_monitor/report_history/</div>
 </body>
@@ -56,8 +175,29 @@ HTML
 HTML
 
           # Ensure static hosting
-          touch "${SITE_DIR}/.nojekyll"
+          touch _site/.nojekyll
 
-          echo "== Sanity check =="
-          echo "Expect an <a ...> anchor on the first line after </style>:"
-          sed -n '1,60p' "${HIST_DIR}/index.html" | sed -n '15,30p'  # quick window around the anchor
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: _site/
+
+      - name: Commit archive back to report_history
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          rsync -a --delete --exclude='.git' _site/report_history/ _hist/
+          cd _hist
+          git add -A
+          if ! git diff --cached --quiet; then
+            git -c user.name='github-actions[bot]' -c user.email='github-actions[bot]@users.noreply.github.com' commit -m "Add reports from run ${GITHUB_RUN_NUMBER}"
+            git push -u origin HEAD:report_history
+          else
+            echo "No archive changes."
+          fi
+
+      - name: Deploy to GitHub Pages
+        id: deploy
+        uses: actions/deploy-pages@v4
