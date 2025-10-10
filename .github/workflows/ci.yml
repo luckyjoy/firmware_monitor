@@ -16,7 +16,7 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  build_and_publish:
+  build_and_deploy:
     runs-on: ubuntu-latest
     environment:
       name: github-pages
@@ -62,15 +62,18 @@ jobs:
             cd ..
           fi
 
-      - name: Assemble site (merge history + add new)
+      - name: Build site (merge history + add new)
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p _site/report_history
+
           # 1) carry forward previous archive
           rsync -a --exclude='.git' --exclude='.github' _hist/ _site/report_history/ || true
+
           # 2) add this run's report
           cp -f reports/*_ubuntu-latest.html _site/report_history/
+
           # 3) site root points to the latest Ubuntu report
           cp "$(ls -t _site/report_history/*_ubuntu-latest.html | head -n 1)" _site/index.html
 
@@ -79,7 +82,8 @@ jobs:
         run: |
           set -euo pipefail
           HIST="_site/report_history"
-          # Build list of links
+
+          # Build list of links (newest first)
           LINKS=""
           for f in $(find "$HIST" -maxdepth 1 -type f -name 'firmware_analysis_report_*.html' | sort -r); do
             b="$(basename "$f")"
@@ -88,7 +92,8 @@ jobs:
               | sed 's/_//g' | sed 's/Build:  /Build: NA /')"
             LINKS="${LINKS}<li><a href=\"${b}\">${lab}</a></li>"
           done
-          # SINGLE-QUOTED heredoc: bash does not interpret '<a' as redirection
+
+          # SINGLE-QUOTED heredoc: bash does NOT interpret '<a' as redirection
           cat > "${HIST}/index.html" <<'HTML'
 <!doctype html>
 <meta charset="utf-8">
