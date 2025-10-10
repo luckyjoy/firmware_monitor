@@ -10,10 +10,10 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write    
-  pages: write       
-  id-token: write    
-  packages: write    
+  contents: write    # For checkout, artifacts, and pushing to the history branch
+  pages: write       # For deploying to GitHub Pages
+  id-token: write    # For authentication with Pages deployment action
+  packages: write    # For pushing Docker images to GHCR
 
 jobs:
   # --- Stage 1: Run Tests on Matrix and Generate Reports ---
@@ -39,7 +39,7 @@ jobs:
         # 1. Run the script with the build number as a simple positional argument
         python firmware_monitor.py ${{ github.run_number }}
         
-        # 2. Find the most recently created HTML report (Robust discovery)
+        # 2. Find the most recently created HTML report
         LATEST_REPORT_PATH=$(ls -t reports/*.html | head -n 1)
         
         if [ -z "$LATEST_REPORT_PATH" ]; then
@@ -76,12 +76,12 @@ jobs:
       - name: Checkout Main Branch Code
         uses: actions/checkout@v4
         
-      # 2. Retrieve Existing History from the dedicated branch (Persistence Fix)
+      # 2. RETRIEVE EXISTING HISTORY (Persistence Fix)
       - name: Retrieve Existing Report History
         uses: actions/checkout@v4
         with:
           repository: ${{ github.repository }}
-          ref: report_history # MUST EXIST in your repo!
+          ref: report_history # CRITICAL: Get files from the dedicated branch
           path: history_temp
           
       # 3. Download all reports from the current matrix runs
@@ -139,14 +139,14 @@ jobs:
         with:
           path: 'reports/' 
           
-      # 6. Update the History Branch with the new combined reports (FINAL FIX)
+      # 6. PUSH COMBINED HISTORY BACK (CRITICAL for Persistence)
       - name: Push Combined History Back to Repository
         uses: ad-m/github-push-action@master
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           directory: reports/report_history 
           branch: report_history
-          force: true # CRITICAL: Overwrite remote history to prevent "atomic push failed"
+          force: true # Required to bypass Git rejection errors
           
       # ---------------------------------------------
       # Docker Image Build/Push for GHCR
