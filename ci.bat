@@ -29,6 +29,6 @@ echo Open secured GitHub server and Jenkins server
 echo.
 sleep 4
 
-start "" "https://github.com/luckyjoy/firmware_monitor/actions"
+rem start "" "https://github.com/luckyjoy/firmware_monitor/actions"
 echo.
 rem  start "" https://localhost:8443/view/all/builds

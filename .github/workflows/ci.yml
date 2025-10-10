@@ -38,6 +38,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+
           # Generate reports with run number as "build"
           python firmware_monitor.py ${{ github.run_number }}
 
@@ -69,91 +70,124 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          path: main
 
-      # Pull the previously deployed site (gh-pages) so we can carry forward history
-      - name: Checkout gh-pages (previous site)
-        id: ghpages
-        continue-on-error: true
-        uses: actions/checkout@v4
-        with:
-          ref: gh-pages
-          path: site_prev
-          fetch-depth: 1
-
-      # Download both OS artifacts into ./new_reports
-      - name: Download Windows report
+      - name: Download both OS artifacts
         uses: actions/download-artifact@v4
         with:
-          name: analysis-reports-windows-latest
-          path: new_reports/
+          path: new_reports
 
-      - name: Download Ubuntu report
-        uses: actions/download-artifact@v4
-        with:
-          name: analysis-reports-ubuntu-latest
-          path: new_reports/
+      - name: Prepare history repository (report_history branch)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf history_repo
+          # If report_history exists, clone it; else create an orphan branch
+          if git ls-remote --exit-code --heads "https://github.com/${GITHUB_REPOSITORY}.git" report_history >/dev/null 2>&1; then
+            git clone --depth 1 --branch report_history "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" history_repo
+          else
+            git clone --depth 1 "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" history_repo
+            cd history_repo
+            git switch --orphan report_history
+            rm -rf ./*
+            echo "<!doctype html><title>Report History</title>" > index.html
+            git add -A
+            git -c user.name='github-actions[bot]' -c user.email='github-actions[bot]@users.noreply.github.com' commit -m "init report_history"
+            git push -u origin report_history
+            cd ..
+          fi
 
-      - name: Assemble site (merge previous history + add new)
+      - name: Build site (merge old history + add new reports)
         shell: bash
         run: |
           set -euo pipefail
 
-          # Our deployment root
-          mkdir -p site_out/report_history
+          mkdir -p site/report_history
 
-          echo "== Bring forward previous history from gh-pages =="
-          if [ -d site_prev/report_history ]; then
-            cp -a site_prev/report_history/. site_out/report_history/ || true
-          else
-            echo "No previous report_history found (first deployment or branch reset)."
-          fi
+          echo "== Bring forward existing archive from report_history branch =="
+          rsync -a --exclude='.git' --exclude='.github' history_repo/ site/report_history/ || true
 
           echo "== Add this run's reports =="
           shopt -s nullglob
-          cp -f new_reports/*_ubuntu-latest.html   site_out/report_history/ 2>/dev/null || true
-          cp -f new_reports/*_windows-latest.html  site_out/report_history/ 2>/dev/null || true
+          cp -f new_reports/*_ubuntu-latest.html   site/report_history/ 2>/dev/null || true
+          cp -f new_reports/*_windows-latest.html  site/report_history/ 2>/dev/null || true
 
           echo "== Pick latest (Ubuntu preferred) for site root index =="
           LATEST_UBU="$(ls -t new_reports/*_ubuntu-latest.html 2>/dev/null | head -n 1 || true)"
           if [ -n "$LATEST_UBU" ]; then
-            cp "$LATEST_UBU" site_out/index.html
+            cp "$LATEST_UBU" site/index.html
           else
             ANY_HTML="$(ls -t new_reports/*.html 2>/dev/null | head -n 1 || true)"
-            [ -n "$ANY_HTML" ] && cp "$ANY_HTML" site_out/index.html || { echo "::error::No HTML to serve as index.html"; exit 1; }
+            [ -n "$ANY_HTML" ] && cp "$ANY_HTML" site/index.html || { echo "::error::No HTML to serve as index.html"; exit 1; }
           fi
 
           echo "== Build history index (pure HTML, absolute Back link) =="
-          mapfile -t FILES < <(find site_out/report_history -maxdepth 1 -type f -name 'firmware_analysis_report_*.html' | sort -r)
-          LINKS=""
+          mapfile -t FILES < <(find site/report_history -maxdepth 1 -type f -name 'firmware_analysis_report_*.html' | sort -r)
+
+          cat > site/report_history/index.html <<'HTML'
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Report History</title>
+  <style>
+    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; margin: 2rem; color: #111827; }
+    a { color: #1d4ed8; text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    .back { margin-bottom: 1rem; display: inline-block; }
+    h1 { margin: .2rem 0 1rem; }
+    ul { padding-left: 1.2rem; }
+    li { margin: .35rem 0; }
+    .note { margin-top: 1.5rem; color: #6b7280; font-size: .9rem; }
+  </style>
+</head>
+<body>
+  /firmware_monitor/← Back to Latest Report</a>
+  <h1>Archived Report History</h1>
+  <ul>
+HTML
+
           for f in "${FILES[@]}"; do
             b="$(basename "$f")"
             label="$(echo "$b" \
               | sed -E 's/^firmware_analysis_report_([0-9]{8})_([0-9]{6})(_[0-9]+)?_(.*)\.html$/Date: \1 Time: \2 Build: \3 OS: \4/' \
               | sed 's/_//g' \
               | sed 's/Build:  /Build: NA /')"
-            LINKS+="<li><a href=\"$b\">$label</a></li>"
+            echo "    <li><a href=\"$b\">$label</a></li>" >> site/report_history/index.html
           done
 
-          {
-            printf '%s\n' '<!doctype html><html lang="en"><head><meta charset="utf-8" />'
-            printf '%s\n' '<meta name="viewport" content="width=device-width, initial-scale=1" />'
-            printf '%s\n' '<title>Report History</title>'
-            printf '%s\n' '<style>body{font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;margin:2rem;color:#111827}a{color:#1d4ed8;text-decoration:none}a:hover{text-decoration:underline}.back{margin-bottom:1rem;display:inline-block}h1{margin:.2rem 0 1rem}ul{padding-left:1.2rem}li{margin:.35rem 0}.note{margin-top:1.5rem;color:#6b7280;font-size:.9rem}</style></head><body>'
-            printf '%s\n' '<a class="back" href="/firm Latest Report</a>'
-            printf '%s\n' '<h1>Archived Report History</h1><ul>'
-            printf '%s\n' "$LINKS"
-            printf '%s\n' '</ul><div class="note">All reports are archived here: /firmware_monitor/report_history/</div></body></html>'
-          } > site_out/report_history/index.html
+          cat >> site/report_history/index.html <<'HTML'
+  </ul>
+  <div class="note">All reports are archived here: /firmware_monitor/report_history/</div>
+</body>
+</html>
+HTML
 
-          # Ensure Pages doesn't try to run Jekyll
-          touch site_out/.nojekyll
+          # Ensure Pages serves as static site
+          touch site/.nojekyll
+
+      - name: Update report_history branch with merged archive
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          rsync -a --delete --exclude='.git' site/report_history/ history_repo/
+          cd history_repo
+          git add -A
+          if ! git diff --cached --quiet; then
+            git -c user.name='github-actions[bot]' -c user.email='github-actions[bot]@users.noreply.github.com' commit -m "Add reports from run ${GITHUB_RUN_NUMBER}"
+            git push origin HEAD:report_history
+          else
+            echo "No changes to commit."
+          fi
 
       - name: Upload Pages artifact (full site)
         uses: actions/upload-pages-artifact@v4
         with:
-          path: 'site_out/'
+          path: 'site/'
 
       - name: Deploy to GitHub Pages
-        id: deployment
         uses: actions/deploy-pages@v4
