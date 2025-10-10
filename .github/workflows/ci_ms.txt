@@ -1,0 +1,58 @@
+name: Firmware Pages
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build_and_deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python 3.10
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Generate report
+        shell: bash
+        run: |
+          set -euo pipefail
+          python firmware_monitor.py ${{ github.run_number }}
+          LATEST="$(ls -t reports/*.html | head -n 1)"
+          if [ -z "$LATEST" ]; then echo "::error::No report HTML found"; exit 1; fi
+          # Make the filename deterministic (Ubuntu suffix for now; we can add Windows later)
+          mv "$LATEST" "reports/$(basename "$LATEST" .html)_ubuntu-latest.html"
+
+      - name: Build site & history (script)
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: bash scripts/publish_pages.sh
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: _site/
+
+      - name: Deploy to GitHub Pages
+        id: deploy
+        uses: actions/deploy-pages@v4

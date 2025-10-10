@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Report History</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; margin: 2rem; color: #111827; }
+    a { color: #1d4ed8; text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    .back { margin-bottom: 1rem; display: inline-block; }
+    h1 { margin: 0.2rem 0 1rem; }
+    ul { padding-left: 1.2rem; }
+    li { margin: 0.35rem 0; }
+    .note { margin-top: 1.5rem; color: #6b7280; font-size: 0.9rem; }
+  </style>
+</head>
+<body>
+  <!-- This must be an anchor with href, not plain text -->
+  /firmware_monitor/← Back to Latest Report</a>
+  <h1>Archived Report History</h1>
+  <ul>
+    {{HISTORY_LINKS}}
+  </ul>
+  <div class="note">All reports are archived here: /firmware_monitor/report_history/</div>
+</body>
+</html>
