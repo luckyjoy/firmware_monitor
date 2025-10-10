@@ -1,4 +1,3 @@
-# Please use this clean, complete YAML content
 name: Firmware Monitor CI
 
 'on':
