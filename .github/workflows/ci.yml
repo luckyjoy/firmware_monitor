@@ -18,6 +18,9 @@ concurrency:
 jobs:
   build_and_publish:
     runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
     steps:
       - name: Checkout main
         uses: actions/checkout@v4
@@ -29,7 +32,7 @@ jobs:
         with:
           python-version: '3.10'
 
-      - name: Generate report (ubuntu)
+      - name: Generate report (Ubuntu)
         shell: bash
         run: |
           set -euo pipefail
@@ -37,12 +40,6 @@ jobs:
           LATEST="$(ls -t reports/*.html | head -n 1)"
           if [ -z "$LATEST" ]; then echo "::error::No report HTML found"; exit 1; fi
           mv "$LATEST" "reports/$(basename "$LATEST" .html)_ubuntu-latest.html"
-
-      - name: Upload report artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: report-ubuntu
-          path: reports/
 
       - name: Prepare archive branch (report_history)
         env:
@@ -65,49 +62,33 @@ jobs:
             cd ..
           fi
 
-      - name: Build site (merge old history + add new)
+      - name: Assemble site (merge history + add new)
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p _site/report_history
-
-          # carry forward existing archive into the site
+          # 1) carry forward previous archive
           rsync -a --exclude='.git' --exclude='.github' _hist/ _site/report_history/ || true
-
-          # bring in the new Ubuntu report
-          mkdir -p _new
-          echo "::group::Download artifact"
-          gh -v >/dev/null 2>&1 || true
-          echo "::endgroup::"
-          # The artifact is already uploaded; use download-artifact instead of gh
-          echo "Copying uploaded artifact files..."
-          cp -f reports/*_ubuntu-latest.html _site/report_history/ 2>/dev/null || true
-
-          # site root points to the latest Ubuntu report
-          UBU="$(ls -t _site/report_history/*_ubuntu-latest.html 2>/dev/null | head -n 1 || true)"
-          if [ -n "$UBU" ]; then
-            cp "$UBU" _site/index.html
-          else
-            ANY="$(ls -t _site/report_history/*.html 2>/dev/null | head -n 1 || true)"
-            [ -n "$ANY" ] && cp "$ANY" _site/index.html || { echo "::error::No HTML report for index"; exit 1; }
-          fi
+          # 2) add this run's report
+          cp -f reports/*_ubuntu-latest.html _site/report_history/
+          # 3) site root points to the latest Ubuntu report
+          cp "$(ls -t _site/report_history/*_ubuntu-latest.html | head -n 1)" _site/index.html
 
       - name: Generate history index (safe HTML + Back link)
         shell: bash
         run: |
           set -euo pipefail
           HIST="_site/report_history"
-
           # Build list of links
-          mapfile -t FILES < <(find "$HIST" -maxdepth 1 -type f -name 'firmware_analysis_report_*.html' | sort -r)
           LINKS=""
-          for f in "${FILES[@]}"; do
+          for f in $(find "$HIST" -maxdepth 1 -type f -name 'firmware_analysis_report_*.html' | sort -r); do
             b="$(basename "$f")"
-            lab="$(echo "$b" | sed -E 's/^firmware_analysis_report_([0-9]{8})_([0-9]{6})(_[0-9]+)?_(.*)\.html$/Date: \1 Time: \2 Build: \3 OS: \4/' | sed 's/_//g' | sed 's/Build:  /Build: NA /')"
+            lab="$(echo "$b" \
+              | sed -E 's/^firmware_analysis_report_([0-9]{8})_([0-9]{6})(_[0-9]+)?_(.*)\.html$/Date: \1 Time: \2 Build: \3 OS: \4/' \
+              | sed 's/_//g' | sed 's/Build:  /Build: NA /')"
             LINKS="${LINKS}<li><a href=\"${b}\">${lab}</a></li>"
           done
-
-          # Single-quoted heredoc → Bash won't interpret '<a ...>'
+          # SINGLE-QUOTED heredoc: bash does not interpret '<a' as redirection
           cat > "${HIST}/index.html" <<'HTML'
 <!doctype html>
 <meta charset="utf-8">
@@ -125,9 +106,7 @@ jobs:
 <ul>
 HTML
           printf '%s\n' "${LINKS}" >> "${HIST}/index.html"
-          echo '</ul><div class="note">All reports are archived here: /firmware_monitor/report_history/</div></body></html>' >> "${HIST}/index.html"
-
-          # ensure static hosting
+          echo '</ul><div class="note">All reports are archived here: /firmware_monitor/report_history/</div>' >> "${HIST}/index.html"
           touch _site/.nojekyll
 
       - name: Upload Pages artifact
