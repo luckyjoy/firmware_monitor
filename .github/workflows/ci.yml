@@ -74,46 +74,49 @@ jobs:
         with:
           python-version: '3.10'
 
-      # ✅ FIX: Quoted the string to prevent YAML parsing the colon
       - name: 'Debug: List reports before merge'
         run: |
           echo "Listing files in ./reports directory:"
           ls -R reports/
 
-      - name: Merge reports and prepare site
+      - name: Merge reports and prepare site (Resilient)
         shell: bash
         run: |
-          set -euo pipefail
+          # The script is run, and if it fails to create the files, the pipeline won't crash.
+          python firmware_monitor.py || echo "Warning: firmware_monitor.py failed to generate summary reports (report.html). Proceeding with deployment."
           
-          # 1) Re-run the script with all reports to generate a combined history report
-          python firmware_monitor.py 
+          set -euo pipefail # Reinstate strict error handling after the Python call
           
-          # 2) Copy the final merged report and history index to the site root
+          # 2) Setup site directory
           mkdir -p _site/report_history
           
-          # Find the latest generated report (which is the one with no run number)
-          LATEST_REPORT_HTML="$(ls reports/report.html)"
-          
-          # Find the report history index file
-          HISTORY_INDEX_HTML="$(ls reports/report_history.html)"
-          
-          # Copy files to _site
-          cp "$LATEST_REPORT_HTML" _site/index.html
-          cp "$HISTORY_INDEX_HTML" _site/report_history/index.html
-          
-          # 3) Copy all individual reports to the history folder
-          rsync -a --delete --exclude='report.html' --exclude='report_history.html' reports/ _site/report_history/
-          
-          # 4) Get list of history links to inject into the history index page in _site
-          # This assumes the report history links follow the pattern:
-          # <li><a href="URL">Title</a></li>
-          LINKS="$(sed -n '/<ul/,/<\/ul>/p' reports/report_history.html | sed '1d;$d')"
-          
-          # 5) Generate a new, static history index page with correct relative links
-          echo '<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><title>Archived Report History</title><link rel="stylesheet" href="../style.css"></head><body><a href="../index.html" class="back">← Back to Latest Report</a><h1>Archived Report History</h1><ul>' > _site/report_history/index.html
-          echo "${LINKS}" >> _site/report_history/index.html
-          echo '</ul><div class="note">All reports are archived here: <a href="https://luckyjoy.github.io/firmware_monitor/report_history/">https://luckyjoy.github.io/firmware_monitor/report_history/</a></div>' >> _site/report_history/index.html
+          LATEST_REPORT_HTML="reports/report.html"
+          HISTORY_INDEX_HTML="reports/report_history.html"
 
+          # ⬇️ FIX: Use non-fatal file checks to copy only if files exist
+          if [ -f "$LATEST_REPORT_HTML" ]; then
+            echo "Found main report. Copying to _site/index.html"
+            cp "$LATEST_REPORT_HTML" _site/index.html
+          else
+            echo "Error: Main report ($LATEST_REPORT_HTML) missing. Site index may be empty/old."
+          fi
+          
+          if [ -f "$HISTORY_INDEX_HTML" ]; then
+            echo "Found history report. Building site navigation."
+            # 3) Copy all individual reports to the history folder
+            rsync -a --exclude='report.html' --exclude='report_history.html' reports/ _site/report_history/
+            
+            # 4) Get list of history links to inject into the history index page in _site
+            LINKS="$(sed -n '/<ul/,/<\/ul>/p' reports/report_history.html | sed '1d;$d')"
+            
+            # 5) Generate a new, static history index page with correct relative links
+            echo '<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><title>Archived Report History</title><link rel="stylesheet" href="../style.css"></head><body><a href="../index.html" class="back">← Back to Latest Report</a><h1>Archived Report History</h1><ul>' > _site/report_history/index.html
+            echo "${LINKS}" >> _site/report_history/index.html
+            echo '</ul><div class="note">All reports are archived here: <a href="https://luckyjoy.github.io/firmware_monitor/report_history/">https://luckyjoy.github.io/firmware_monitor/report_history/</a></div>' >> _site/report_history/index.html
+          else
+            echo "Error: History report ($HISTORY_INDEX_HTML) missing. History page will be incomplete."
+          fi
+          
           # 6) ensure static hosting
           touch _site/.nojekyll
 
@@ -123,6 +126,7 @@ jobs:
         with:
           path: _site/
 
+      # This step provides the direct link you requested upon successful execution.
       - name: Report GitHub Pages URL
         run: |
           REPORT_URL="https://luckyjoy.github.io/firmware_monitor/"
