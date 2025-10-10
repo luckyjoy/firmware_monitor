@@ -51,7 +51,7 @@ jobs:
     needs: build_reports
     runs-on: ubuntu-latest
     steps:
-      # ⬇️ FIX 1: Checkout the main branch to the root
+      # ⬇️ FIX 1: Checkout the main branch to the root (where firmware_monitor.py lives)
       - name: Checkout main branch
         uses: actions/checkout@v4
         with:
