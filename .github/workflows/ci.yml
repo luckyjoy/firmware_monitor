@@ -33,7 +33,7 @@ jobs:
       - name: Generate report (${{ matrix.os }})
         shell: bash
         env:
-          BUILD_NUM: ${{ github.run_number }} # <-- NEW: Pass run number as environment variable
+          BUILD_NUM: ${{ github.run_number }} # <--- NEW: Pass run number as environment variable
         run: |
           set -euo pipefail
           python firmware_monitor.py $BUILD_NUM # <-- Pass variable as argument
@@ -83,6 +83,10 @@ jobs:
 
       - name: Merge reports and prepare site (Fully Resilient)
         shell: bash
+        env:
+          # Define environment variables used in the run block
+          BUILD_NUM: ${{ github.run_number }}
+          
         run: |
           # 1) Attempt to run the script. No build number argument is passed here, 
           # which forces merge mode in firmware_monitor.py.
@@ -101,6 +105,21 @@ jobs:
           if [ -f "$LATEST_REPORT_HTML" ]; then
             echo "Found merged report. Copying to _site/index.html"
             cp "$LATEST_REPORT_HTML" _site/index.html
+            
+            # --- NEW: Post-Processing to fix 'NA' and raw timestamp ---
+            # Generate a new, accurate human-readable timestamp for the deployment
+            HUMAN_DATE="$(date -u '+%Y-%m-%d %H:%M:%S UTC')"
+            
+            # Inject Build Number (replace 'Build Number: NA' with the actual run number)
+            # The python script now puts a human readable timestamp, so we ensure the NA is fixed.
+            sed -i "s/Build Number: NA/Build Number: ${BUILD_NUM}/g" _site/index.html
+            
+            # The python script now uses the correct human date by default, but if the sed from above 
+            # failed for some reason, we ensure the date is current. 
+            # Note: This step is now redundant if the python script is fixed, but is a safe fallback.
+            # sed -i "s/Test Run Timestamp: [0-9]\{8\}_[0-9]\{6\}/Test Run Timestamp: ${HUMAN_DATE}/g" _site/index.html
+            
+            echo "SUCCESS: Injected Run Number ($BUILD_NUM) into _site/index.html."
           else
             echo "ERROR: Merged report ($LATEST_REPORT_HTML) missing. Using fallback Ubuntu report."
             # Find the most recently created individual report from Ubuntu artifact
