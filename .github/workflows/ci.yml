@@ -45,92 +45,61 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: reports-${{ matrix.os }}
-          path: reports/
+          path: reports
 
   publish_site:
     needs: build_reports
     runs-on: ubuntu-latest
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     steps:
-      - name: Checkout main
+      - name: Checkout archive branch
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0
+          ref: report_history
+          path: _hist
 
-      # Download both OS artifacts into ./_new
-      - name: Download Ubuntu
+      - name: Download all reports
         uses: actions/download-artifact@v4
         with:
-          name: reports-ubuntu-latest
-          path: _new/
+          pattern: reports-*
+          path: reports
+          merge-multiple: true
 
-      - name: Download Windows
-        uses: actions/download-artifact@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
         with:
-          name: reports-windows-latest
-          path: _new/
+          python-version: '3.10'
 
-      # Clone or initialize the archive branch (report_history) into ./_hist
-      - name: Prepare archive branch (report_history)
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Merge reports and prepare site
         shell: bash
         run: |
           set -euo pipefail
-          rm -rf _hist
-          if git ls-remote --exit-code --heads "https://github.com/${GITHUB_REPOSITORY}.git" report_history >/dev/null 2>&1; then
-            git clone --depth 1 --branch report_history "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" _hist
-          else
-            git clone --depth 1 "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" _hist
-            cd _hist
-            git switch --orphan report_history
-            rm -rf ./*
-            echo "<!doctype html><title>Report History</title>" > index.html
-            git add -A
-            git -c user.name='github-actions[bot]' -c user.email='github-actions[bot]@users.noreply.github.com' commit -m "init report_history"
-            git push -u origin report_history
-            cd ..
-          fi
-
-      # Build the site by merging old archive + new reports
-      - name: Build site
-        shell: bash
-        run: |
-          set -euo pipefail
+          
+          # 1) Re-run the script with all reports to generate a combined history report
+          python firmware_monitor.py
+          
+          # 2) Copy the final merged report and history index to the site root
           mkdir -p _site/report_history
-
-          # 1) carry forward previous archive
-          rsync -a --exclude='.git' --exclude='.github' _hist/ _site/report_history/ || true
-
-          # 2) add this run's reports
-          shopt -s nullglob
-          cp -f _new/*_ubuntu-latest.html   _site/report_history/ 2>/dev/null || true
-          cp -f _new/*_windows-latest.html  _site/report_history/ 2>/dev/null || true
-
-          # 3) pick latest report (prefer ubuntu, fallback any)
-          UBU="$(ls -t _new/*_ubuntu-latest.html 2>/dev/null | head -n 1 || true)"
-          ANY="$(ls -t _new/*.html 2>/dev/null | head -n 1 || true)"
-          if [ -n "$UBU" ]; then
-            cp "$UBU" _site/latest_report.html
-          elif [ -n "$ANY" ]; then
-            cp "$ANY" _site/latest_report.html
-          fi
-
-          # 4) generate landing index.html
-          echo '<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Firmware Monitor</title><style>body{font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;margin:2rem;color:#111827}a{color:#1d4ed8;text-decoration:none;font-weight:600}a:hover{text-decoration:underline}h1{margin:.2rem 0 1rem}.note{margin-top:1.5rem;color:#6b7280;font-size:.9rem}</style><h1>Firmware Monitor</h1><ul>' > _site/index.html
-          echo "<li><a href=\"latest_report.html\">View Latest Report</a></li>" >> _site/index.html
-          echo "<li><a href=\"https://luckyjoy.github.io/firmware_monitor/report_history/\">View Report History</a></li>" >> _site/index.html
-          echo '</ul><div class="note">Latest report and all archives are published here: <a href="https://luckyjoy.github.io/firmware_monitor/">https://luckyjoy.github.io/firmware_monitor/</a></div>' >> _site/index.html
-
-          # 5) generate HTML history page with working back link
-          LINKS=""
-          for f in $(find _site/report_history -maxdepth 1 -type f -name 'firmware_analysis_report_*.html' | sort -r); do
-            b="$(basename "$f")"
-            lab="$(echo "$b" | sed -E 's/^firmware_analysis_report_([0-9]{8})_([0-9]{6})(_[0-9]+)?_(.*)\.html$/Date: \1 Time: \2 Build: \3 OS: \4/' | sed 's/_//g' | sed 's/Build:  /Build: NA /')"
-            LINKS="${LINKS}<li><a href=\"${b}\">${lab}</a></li>"
-          done
-
-          echo '<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Report History</title><style>body{font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;margin:2rem;color:#111827}a{color:#1d4ed8;text-decoration:none}a:hover{text-decoration:underline}.back{margin-bottom:1rem;display:inline-block;padding:.5rem .75rem;background:#dbeafe;border-radius:6px;font-weight:600}h1{margin:.2rem 0 1rem}ul{padding-left:1.2rem}li{margin:.35rem 0}.note{margin-top:1.5rem;color:#6b7280;font-size:.9rem}</style><a href=\"../index.html\" class=\"back\">← Back to Latest Report</a><h1>Archived Report History</h1><ul>' > _site/report_history/index.html
+          
+          # Find the latest generated report (which is the one with no run number)
+          LATEST_REPORT_HTML="$(ls reports/report.html)"
+          
+          # Find the report history index file
+          HISTORY_INDEX_HTML="$(ls reports/report_history.html)"
+          
+          # Copy files to _site
+          cp "$LATEST_REPORT_HTML" _site/index.html
+          cp "$HISTORY_INDEX_HTML" _site/report_history/index.html
+          
+          # 3) Copy all individual reports to the history folder
+          rsync -a --exclude 'report.html' --exclude 'report_history.html' reports/ _site/report_history/
+          
+          # 4) Get list of history links to inject into the history index page in _site
+          # This assumes the report history links follow the pattern:
+          # <li><a href="URL">Title</a></li>
+          LINKS="$(sed -n '/<ul/,/<\/ul>/p' reports/report_history.html | sed '1d;$d')"
+          
+          # 5) Generate a new, static history index page with correct relative links
+          echo '<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><title>Archived Report History</title><link rel="stylesheet" href="../style.css"></head><body><a href="../index.html" class="back">← Back to Latest Report</a><h1>Archived Report History</h1><ul>' > _site/report_history/index.html
           echo "${LINKS}" >> _site/report_history/index.html
           echo '</ul><div class="note">All reports are archived here: <a href="https://luckyjoy.github.io/firmware_monitor/report_history/">https://luckyjoy.github.io/firmware_monitor/report_history/</a></div>' >> _site/report_history/index.html
 
@@ -142,6 +111,18 @@ jobs:
         uses: actions/upload-pages-artifact@v4
         with:
           path: _site/
+
+      # ➡️ NEW STEP: Add the link to the CI job summary 
+      - name: Report GitHub Pages URL
+        run: |
+          REPORT_URL="https://luckyjoy.github.io/firmware_monitor/"
+          
+          # Print the URL to the console
+          echo "The latest report is published here: ${REPORT_URL}"
+          
+          # Add a clickable link to the GitHub Actions Job Summary
+          echo "## ✅ Latest Report Published" >> $GITHUB_STEP_SUMMARY
+          echo "- **[View Latest Report](${REPORT_URL})**" >> $GITHUB_STEP_SUMMARY
 
       # Update the archive branch contents from _site/report_history
       - name: Commit archive (report_history)
@@ -155,10 +136,10 @@ jobs:
           git add -A
           if ! git diff --cached --quiet; then
             git -c user.name='github-actions[bot]' -c user.email='github-actions[bot]@users.noreply.github.com' commit -m "Add reports from run ${GITHUB_RUN_NUMBER}"
-            git push origin HEAD:report_history
-          else
-            echo "No archive changes."
+            git push origin report_history
           fi
 
+      # Final deployment step
       - name: Deploy to GitHub Pages
+        id: deployment
         uses: actions/deploy-pages@v4
