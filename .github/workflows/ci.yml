@@ -4,9 +4,6 @@ name: Firmware Monitor CI
   push:
     branches:
       - main
-  pull_request:
-    branches:
-      - main
   workflow_dispatch:
 
 permissions:
@@ -15,7 +12,6 @@ permissions:
   id-token: write
   packages: write
 
-# Prevent overlapping Pages deployments
 concurrency:
   group: pages
   cancel-in-progress: true
@@ -46,7 +42,7 @@ jobs:
         run: |
           set -euo pipefail
 
-          # Run the report generator with build number (GitHub run number)
+          # Generate reports (pass the run number as build id)
           python firmware_monitor.py ${{ github.run_number }}
 
           # Find the latest HTML produced by the script
@@ -69,7 +65,7 @@ jobs:
           name: analysis-reports-${{ matrix.os }}
           path: reports/
 
-  # --- Stage 2: Combine Reports, Build History, Deploy ---
+  # --- Stage 2: Merge History, Build Pages, Deploy ---
   build_and_deploy:
     needs: test_and_prepare
     runs-on: ubuntu-latest
@@ -101,6 +97,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p reports
+          # Prefer Ubuntu as latest; fallback to any html
           LATEST_UBUNTU="$(ls -t reports/*_ubuntu-latest.html 2>/dev/null | head -n 1 || true)"
           if [ -n "$LATEST_UBUNTU" ]; then
             cp "$LATEST_UBUNTU" reports/index.html
@@ -129,7 +126,7 @@ jobs:
           fi
 
           git fetch origin report_history:report_history
-          # Create a completely separate folder for the branch (no mixing with main)
+          # Add a separate worktree folder just for the history branch
           git worktree add ../history_wt report_history
 
       - name: Merge existing history + new reports
@@ -149,7 +146,7 @@ jobs:
           echo "== Totals after merge =="
           echo "HTML count: $(ls -1 main/reports/report_history/*.html 2>/dev/null | wc -l)"
 
-      - name: Generate history index (direct HTML, absolute Back link)
+      - name: Generate history index (HTML with absolute Back link)
         shell: bash
         run: |
           set -euo pipefail
@@ -186,12 +183,12 @@ jobs:
   </style>
 </head>
 <body>
-  \${BASE}← Back to Latest Report</a>
+  ${BASE}← Back to Latest Report</a>
   <h1>Archived Report History</h1>
   <ul>
-    \${LINKS}
+    ${LINKS}
   </ul>
-  <div class="note">All reports are archived here: \${BASE}report_history/</div>
+  <div class="note">All reports are archived here: ${BASE}report_history/</div>
 </body>
 </html>
 HTML
