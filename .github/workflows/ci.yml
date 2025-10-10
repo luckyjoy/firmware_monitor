@@ -107,12 +107,22 @@ jobs:
           cp -f _new/*_ubuntu-latest.html   _site/report_history/ 2>/dev/null || true
           cp -f _new/*_windows-latest.html  _site/report_history/ 2>/dev/null || true
 
-          # 3) latest index.html at site root (prefer ubuntu)
+          # 3) pick latest report (prefer ubuntu, fallback any)
           UBU="$(ls -t _new/*_ubuntu-latest.html 2>/dev/null | head -n 1 || true)"
-          if [ -n "$UBU" ]; then cp "$UBU" _site/index.html
-          else ANY="$(ls -t _new/*.html 2>/dev/null | head -n 1 || true)"; [ -n "$ANY" ] && cp "$ANY" _site/index.html; fi
+          ANY="$(ls -t _new/*.html 2>/dev/null | head -n 1 || true)"
+          if [ -n "$UBU" ]; then
+            cp "$UBU" _site/latest_report.html
+          elif [ -n "$ANY" ]; then
+            cp "$ANY" _site/latest_report.html
+          fi
 
-          # 4) generate HTML history page with fixed Back + archive link
+          # 4) generate landing index.html
+          echo '<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Firmware Monitor</title><style>body{font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;margin:2rem;color:#111827}a{color:#1d4ed8;text-decoration:none;font-weight:600}a:hover{text-decoration:underline}h1{margin:.2rem 0 1rem}.note{margin-top:1.5rem;color:#6b7280;font-size:.9rem}</style><h1>Firmware Monitor</h1><ul>' > _site/index.html
+          echo "<li><a href=\"latest_report.html\">View Latest Report</a></li>" >> _site/index.html
+          echo "<li><a href=\"https://luckyjoy.github.io/firmware_monitor/report_history/\">View Report History</a></li>" >> _site/index.html
+          echo '</ul><div class="note">Latest report and all archives are published here: <a href="https://luckyjoy.github.io/firmware_monitor/">https://luckyjoy.github.io/firmware_monitor/</a></div>' >> _site/index.html
+
+          # 5) generate HTML history page with working back link
           LINKS=""
           for f in $(find _site/report_history -maxdepth 1 -type f -name 'firmware_analysis_report_*.html' | sort -r); do
             b="$(basename "$f")"
@@ -120,14 +130,14 @@ jobs:
             LINKS="${LINKS}<li><a href=\"${b}\">${lab}</a></li>"
           done
 
-          echo '<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Report History</title><style>body{font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;margin:2rem;color:#111827}a{color:#1d4ed8;text-decoration:none}a:hover{text-decoration:underline}.back{margin-bottom:1rem;display:inline-block}h1{margin:.2rem 0 1rem}ul{padding-left:1.2rem}li{margin:.35rem 0}.note{margin-top:1.5rem;color:#6b7280;font-size:.9rem}</style><a class="back" href="https://luckyjoy.github.io/firmware_monitor/">← Back to Latest Report</a><h1>Archived Report History</h1><ul>' > _site/report_history/index.html
+          echo '<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Report History</title><style>body{font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;margin:2rem;color:#111827}a{color:#1d4ed8;text-decoration:none}a:hover{text-decoration:underline}.back{margin-bottom:1rem;display:inline-block;padding:.5rem .75rem;background:#dbeafe;border-radius:6px;font-weight:600}h1{margin:.2rem 0 1rem}ul{padding-left:1.2rem}li{margin:.35rem 0}.note{margin-top:1.5rem;color:#6b7280;font-size:.9rem}</style><a href=\"../index.html\" class=\"back\">← Back to Latest Report</a><h1>Archived Report History</h1><ul>' > _site/report_history/index.html
           echo "${LINKS}" >> _site/report_history/index.html
           echo '</ul><div class="note">All reports are archived here: <a href="https://luckyjoy.github.io/firmware_monitor/report_history/">https://luckyjoy.github.io/firmware_monitor/report_history/</a></div>' >> _site/report_history/index.html
 
-          # 5) ensure static hosting
+          # 6) ensure static hosting
           touch _site/.nojekyll
 
-      # Publish the site artifact (contains full history)
+      # Publish the site artifact (contains full history + landing page)
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v4
         with:
