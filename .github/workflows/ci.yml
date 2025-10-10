@@ -16,53 +16,39 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  test_and_prepare:
+  build_reports:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os:
-          - ubuntu-latest
-          - windows-latest
+        os: [ubuntu-latest, windows-latest]
     steps:
-      - name: Checkout code
+      - name: Checkout
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.10'
 
-      - name: Run Analysis Script & Rename Report (${{ matrix.os }})
+      - name: Generate report (${{ matrix.os }})
         shell: bash
         run: |
           set -euo pipefail
-
-          # Generate reports with run number as "build"
           python firmware_monitor.py ${{ github.run_number }}
 
-          # Find the latest HTML produced by the script
-          LATEST_REPORT_PATH="$(ls -t reports/*.html | head -n 1)"
-          if [ -z "${LATEST_REPORT_PATH}" ]; then
-            echo "::error::No report file found!"
-            exit 1
-          fi
-
-          # Append OS suffix so the two legs don't collide
+          # rename latest html with OS suffix
+          LATEST="$(ls -t reports/*.html | head -n 1)"
           OS_SUFFIX="$(echo "${{ matrix.os }}" | tr '[:upper:]' '[:lower:]')"
-          BASE_NAME="$(basename "${LATEST_REPORT_PATH}" .html)"
-          NEW_FILENAME="${BASE_NAME}_${OS_SUFFIX}.html"
-          mv "${LATEST_REPORT_PATH}" "reports/${NEW_FILENAME}"
+          mv "$LATEST" "reports/$(basename "$LATEST" .html)_${OS_SUFFIX}.html"
 
-      - name: Upload analysis reports
+      - name: Upload report artifact
         uses: actions/upload-artifact@v4
         with:
-          name: analysis-reports-${{ matrix.os }}
+          name: reports-${{ matrix.os }}
           path: reports/
 
-  build_and_deploy:
-    needs: test_and_prepare
+  publish_site:
+    needs: build_reports
     runs-on: ubuntu-latest
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     steps:
@@ -71,24 +57,32 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Download both OS artifacts
+      # Download both OS artifacts into ./_new
+      - name: Download Ubuntu
         uses: actions/download-artifact@v4
         with:
-          path: new_reports
+          name: reports-ubuntu-latest
+          path: _new/
 
-      - name: Prepare history repository (report_history branch)
+      - name: Download Windows
+        uses: actions/download-artifact@v4
+        with:
+          name: reports-windows-latest
+          path: _new/
+
+      # Clone or initialize the archive branch (report_history) into ./_hist
+      - name: Prepare archive branch (report_history)
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         shell: bash
         run: |
           set -euo pipefail
-          rm -rf history_repo
-          # If report_history exists, clone it; else create an orphan branch
+          rm -rf _hist
           if git ls-remote --exit-code --heads "https://github.com/${GITHUB_REPOSITORY}.git" report_history >/dev/null 2>&1; then
-            git clone --depth 1 --branch report_history "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" history_repo
+            git clone --depth 1 --branch report_history "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" _hist
           else
-            git clone --depth 1 "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" history_repo
-            cd history_repo
+            git clone --depth 1 "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" _hist
+            cd _hist
             git switch --orphan report_history
             rm -rf ./*
             echo "<!doctype html><title>Report History</title>" > index.html
@@ -98,96 +92,63 @@ jobs:
             cd ..
           fi
 
-      - name: Build site (merge old history + add new reports)
+      # Build the site by merging old archive + new reports
+      - name: Build site
         shell: bash
         run: |
           set -euo pipefail
+          mkdir -p _site/report_history
 
-          mkdir -p site/report_history
+          # 1) carry forward previous archive
+          rsync -a --exclude='.git' --exclude='.github' _hist/ _site/report_history/ || true
 
-          echo "== Bring forward existing archive from report_history branch =="
-          rsync -a --exclude='.git' --exclude='.github' history_repo/ site/report_history/ || true
-
-          echo "== Add this run's reports =="
+          # 2) add this run's reports
           shopt -s nullglob
-          cp -f new_reports/*_ubuntu-latest.html   site/report_history/ 2>/dev/null || true
-          cp -f new_reports/*_windows-latest.html  site/report_history/ 2>/dev/null || true
+          cp -f _new/*_ubuntu-latest.html   _site/report_history/ 2>/dev/null || true
+          cp -f _new/*_windows-latest.html  _site/report_history/ 2>/dev/null || true
 
-          echo "== Pick latest (Ubuntu preferred) for site root index =="
-          LATEST_UBU="$(ls -t new_reports/*_ubuntu-latest.html 2>/dev/null | head -n 1 || true)"
-          if [ -n "$LATEST_UBU" ]; then
-            cp "$LATEST_UBU" site/index.html
-          else
-            ANY_HTML="$(ls -t new_reports/*.html 2>/dev/null | head -n 1 || true)"
-            [ -n "$ANY_HTML" ] && cp "$ANY_HTML" site/index.html || { echo "::error::No HTML to serve as index.html"; exit 1; }
-          fi
+          # 3) latest index.html at site root (prefer ubuntu)
+          UBU="$(ls -t _new/*_ubuntu-latest.html 2>/dev/null | head -n 1 || true)"
+          if [ -n "$UBU" ]; then cp "$UBU" _site/index.html
+          else ANY="$(ls -t _new/*.html 2>/dev/null | head -n 1 || true)"; [ -n "$ANY" ] && cp "$ANY" _site/index.html; fi
 
-          echo "== Build history index (pure HTML, absolute Back link) =="
-          mapfile -t FILES < <(find site/report_history -maxdepth 1 -type f -name 'firmware_analysis_report_*.html' | sort -r)
-
-          cat > site/report_history/index.html <<'HTML'
-<!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Report History</title>
-  <style>
-    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; margin: 2rem; color: #111827; }
-    a { color: #1d4ed8; text-decoration: none; }
-    a:hover { text-decoration: underline; }
-    .back { margin-bottom: 1rem; display: inline-block; }
-    h1 { margin: .2rem 0 1rem; }
-    ul { padding-left: 1.2rem; }
-    li { margin: .35rem 0; }
-    .note { margin-top: 1.5rem; color: #6b7280; font-size: .9rem; }
-  </style>
-</head>
-<body>
-  /firmware_monitor/← Back to Latest Report</a>
-  <h1>Archived Report History</h1>
-  <ul>
-HTML
-
-          for f in "${FILES[@]}"; do
+          # 4) generate HTML history page (absolute Back link)
+          LINKS=""
+          for f in $(find _site/report_history -maxdepth 1 -type f -name 'firmware_analysis_report_*.html' | sort -r); do
             b="$(basename "$f")"
-            label="$(echo "$b" \
-              | sed -E 's/^firmware_analysis_report_([0-9]{8})_([0-9]{6})(_[0-9]+)?_(.*)\.html$/Date: \1 Time: \2 Build: \3 OS: \4/' \
-              | sed 's/_//g' \
-              | sed 's/Build:  /Build: NA /')"
-            echo "    <li><a href=\"$b\">$label</a></li>" >> site/report_history/index.html
+            lab="$(echo "$b" | sed -E 's/^firmware_analysis_report_([0-9]{8})_([0-9]{6})(_[0-9]+)?_(.*)\.html$/Date: \1 Time: \2 Build: \3 OS: \4/' | sed 's/_//g' | sed 's/Build:  /Build: NA /')"
+            LINKS="${LINKS}<li><a href=\"${b}\">${lab}</a></li>"
           done
 
-          cat >> site/report_history/index.html <<'HTML'
-  </ul>
-  <div class="note">All reports are archived here: /firmware_monitor/report_history/</div>
-</body>
-</html>
-HTML
+          echo '<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Report History</title><style>body{font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;margin:2rem;color:#111827}a{color:#1d4ed8;text-decoration:none}a:hover{text-decoration:underline}.back{margin-bottom:1rem;display:inline-block}h1{margin:.2rem 0 1rem}ul{padding-left:1.2rem}li{margin:.35rem 0}.note{margin-top:1.5rem;color:#6b7280;font-size:.9rem}</style>/firmware_monitor/← Back to Latest Report</a><h1>Archived Report History</h1><ul>' > _site/report_history/index.html
+          echo "${LINKS}" >> _site/report_history/index.html
+          echo '</ul><div class="note">All reports are archived here: /firmware_monitor/report_history/</div>' >> _site/report_history/index.html
 
-          # Ensure Pages serves as static site
-          touch site/.nojekyll
+          # 5) ensure static hosting
+          touch _site/.nojekyll
 
-      - name: Update report_history branch with merged archive
+      # Publish the site artifact (contains full history)
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: _site/
+
+      # Update the archive branch contents from _site/report_history
+      - name: Commit archive (report_history)
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         shell: bash
         run: |
           set -euo pipefail
-          rsync -a --delete --exclude='.git' site/report_history/ history_repo/
-          cd history_repo
+          rsync -a --delete --exclude='.git' _site/report_history/ _hist/
+          cd _hist
           git add -A
           if ! git diff --cached --quiet; then
             git -c user.name='github-actions[bot]' -c user.email='github-actions[bot]@users.noreply.github.com' commit -m "Add reports from run ${GITHUB_RUN_NUMBER}"
             git push origin HEAD:report_history
           else
-            echo "No changes to commit."
+            echo "No archive changes."
           fi
-
-      - name: Upload Pages artifact (full site)
-        uses: actions/upload-pages-artifact@v4
-        with:
-          path: 'site/'
 
       - name: Deploy to GitHub Pages
         uses: actions/deploy-pages@v4
