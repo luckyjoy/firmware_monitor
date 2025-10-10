@@ -226,9 +226,13 @@ class FirmwarePerformanceAnalyzer:
     def _generate_history_html(self, report_dir):
         """Scans the reports directory and generates the list HTML for report_history.html."""
         
-        # Find all individual reports (excluding the fixed-name merge reports)
+        # Reports to exclude from the history list, as they are used for the fixed index pages
+        EXCLUDE_REPORTS = {"report.html", "report_history.html"}
+        
+        # Find all individual reports (the ones downloaded from artifacts and the newly created one)
+        # Using explicit exclusion of the fixed-name files for robustness
         all_reports = sorted([f for f in os.listdir(report_dir) 
-                              if f.endswith(".html") and not f.startswith("report")], 
+                              if f.endswith(".html") and f not in EXCLUDE_REPORTS], 
                               reverse=True)
         
         list_items = []
@@ -237,6 +241,7 @@ class FirmwarePerformanceAnalyzer:
             link_path = filename 
             
             # Extract timestamp/info for display
+            # Example: firmware_analysis_report_20251009_123456_10_ubuntu-latest.html
             display_name = filename.replace("firmware_analysis_report_", "").replace(".html", "")
             
             list_items.append(f'<li><a href="./{link_path}">{display_name}</a></li>')
