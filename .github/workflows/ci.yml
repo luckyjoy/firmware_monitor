@@ -112,7 +112,7 @@ jobs:
           if [ -n "$UBU" ]; then cp "$UBU" _site/index.html
           else ANY="$(ls -t _new/*.html 2>/dev/null | head -n 1 || true)"; [ -n "$ANY" ] && cp "$ANY" _site/index.html; fi
 
-          # 4) generate HTML history page (absolute Back link)
+          # 4) generate HTML history page with fixed Back + archive link
           LINKS=""
           for f in $(find _site/report_history -maxdepth 1 -type f -name 'firmware_analysis_report_*.html' | sort -r); do
             b="$(basename "$f")"
@@ -120,9 +120,9 @@ jobs:
             LINKS="${LINKS}<li><a href=\"${b}\">${lab}</a></li>"
           done
 
-          echo '<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Report History</title><style>body{font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;margin:2rem;color:#111827}a{color:#1d4ed8;text-decoration:none}a:hover{text-decoration:underline}.back{margin-bottom:1rem;display:inline-block}h1{margin:.2rem 0 1rem}ul{padding-left:1.2rem}li{margin:.35rem 0}.note{margin-top:1.5rem;color:#6b7280;font-size:.9rem}</style>/firmware_monitor/← Back to Latest Report</a><h1>Archived Report History</h1><ul>' > _site/report_history/index.html
+          echo '<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Report History</title><style>body{font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;margin:2rem;color:#111827}a{color:#1d4ed8;text-decoration:none}a:hover{text-decoration:underline}.back{margin-bottom:1rem;display:inline-block}h1{margin:.2rem 0 1rem}ul{padding-left:1.2rem}li{margin:.35rem 0}.note{margin-top:1.5rem;color:#6b7280;font-size:.9rem}</style><a class="back" href="https://luckyjoy.github.io/firmware_monitor/">← Back to Latest Report</a><h1>Archived Report History</h1><ul>' > _site/report_history/index.html
           echo "${LINKS}" >> _site/report_history/index.html
-          echo '</ul><div class="note">All reports are archived here: /firmware_monitor/report_history/</div>' >> _site/report_history/index.html
+          echo '</ul><div class="note">All reports are archived here: <a href="https://luckyjoy.github.io/firmware_monitor/report_history/">https://luckyjoy.github.io/firmware_monitor/report_history/</a></div>' >> _site/report_history/index.html
 
           # 5) ensure static hosting
           touch _site/.nojekyll

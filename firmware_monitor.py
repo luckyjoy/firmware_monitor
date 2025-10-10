@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 """
-Firmware Performance Monitor & Report Generator
-------------------------------------------------
+firmware_monitor.py: Firmware Performance Monitor & Report Generator
+-------------------------------------------------------------------
 Generates detailed firmware performance analysis reports
 in both TXT and HTML formats with scenario-based metrics.
 
-Changes in this version:
-- Robust navigation using absolute URLs suitable for GitHub Pages project sites.
-- SITE_BASE_PATH env var to override the base path (defaults to '/firmware_monitor/').
+Notes:
+- Navigation links point to SITE_BASE_URL (default: https://luckyjoy.github.io/firmware_monitor/)
+- You may override SITE_BASE_URL by setting env var SITE_BASE_URL before running.
 """
 
 import os
@@ -33,16 +33,13 @@ STATUS_COLORS = {
     "MIXED": "#f59e0b"  # amber
 }
 
-# GitHub Pages project base path (absolute URL path).
-# Example for repo "firmware_monitor": "/firmware_monitor/"
-SITE_BASE_PATH = os.environ.get("SITE_BASE_PATH", "/firmware_monitor/")
-if not SITE_BASE_PATH.startswith("/"):
-    SITE_BASE_PATH = "/" + SITE_BASE_PATH
-if not SITE_BASE_PATH.endswith("/"):
-    SITE_BASE_PATH += "/"
+# GitHub Pages base URL (absolute). Override with env var if needed.
+SITE_BASE_URL = os.environ.get("SITE_BASE_URL", "https://luckyjoy.github.io/firmware_monitor/")
+if not SITE_BASE_URL.endswith("/"):
+    SITE_BASE_URL = SITE_BASE_URL + "/"
 
-LATEST_URL = SITE_BASE_PATH  # e.g., "/firmware_monitor/"
-HISTORY_URL = SITE_BASE_PATH + "report_history/"
+LATEST_URL = SITE_BASE_URL
+HISTORY_URL = SITE_BASE_URL + "report_history/"
 
 # -------------------- DATASET: FIXED DUMMY DATA --------------------
 MOCK_LOG_DATA = [
@@ -128,7 +125,6 @@ def evaluate_scenario(scenario_data, thresholds):
     results = {}
     found_fail, found_pass, found_skip = False, False, False
 
-    # Iterate over all defined metrics to find missing ones
     for metric_name in thresholds.keys():
         if metric_name in scenario_data["metrics"]:
             values = scenario_data["metrics"][metric_name]
@@ -144,11 +140,13 @@ def evaluate_scenario(scenario_data, thresholds):
         elif status == "SKIP":
             found_skip = True
 
-    if found_fail:
-        scenario_status = "FAIL"
-    elif found_pass and not found_fail and found_skip:
+    if found_fail and found_pass:
         scenario_status = "MIXED"
-    elif found_pass and not found_fail:
+    elif found_fail:
+        scenario_status = "FAIL"
+    elif found_pass and found_skip:
+        scenario_status = "MIXED"
+    elif found_pass:
         scenario_status = "PASS"
     else:
         scenario_status = "SKIP"
@@ -182,7 +180,6 @@ class FirmwarePerformanceAnalyzer:
         report_dir = os.path.join(os.getcwd(), "reports")
         os.makedirs(report_dir, exist_ok=True)
 
-        # Local time in a simple timestamp
         timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
         base_filename = f"firmware_analysis_report_{timestamp}"
         if self.build_number != "NA":
@@ -202,14 +199,13 @@ class FirmwarePerformanceAnalyzer:
     def generate_text_report(self, timestamp):
         lines = []
         lines.append("Firmware Performance Analysis Report")
-        lines.append(f"Author: Bang Thien Nguyen ontario1998@gmail.com")
+        lines.append(f"Author: Bang Thien Nguyen <ontario1998@gmail.com>")
         lines.append(f"Build Number: {self.build_number}")
         lines.append(f"Test Run Timestamp: {timestamp}")
         lines.append("=" * 60)
 
         for result in self.results:
             lines.append(f"\nScenario: {result['scenario']}")
-            # Iterate over all possible metrics from the status report
             for metric, status in sorted(result["metric_status"].items()):
                 values = result["metrics"].get(metric)
                 if values:
@@ -224,7 +220,6 @@ class FirmwarePerformanceAnalyzer:
             lines.append(f"Scenario Status: {result['scenario_status']}")
             lines.append("-" * 40)
 
-        # --- Test Suites Summary ---
         suite_pass, suite_fail, suite_mixed, suite_skip = self._get_suite_summary_counts()
         total_suites = len(self.results)
         suite_pass_percent = (suite_pass / total_suites * 100) if total_suites > 0 else 0
@@ -232,7 +227,6 @@ class FirmwarePerformanceAnalyzer:
         lines.append(f"Total Test Suites: {total_suites}")
         lines.append(f"PASS: {suite_pass} ({suite_pass_percent:.2f}%), FAIL: {suite_fail}, MIXED: {suite_mixed}, SKIP: {suite_skip}")
 
-        # --- Individual Tests Summary ---
         metric_pass, metric_fail, metric_skip = self._get_metric_summary_counts()
         total_metrics = metric_pass + metric_fail + metric_skip
         metric_pass_percent = (metric_pass / total_metrics * 100) if total_metrics > 0 else 0
@@ -243,21 +237,19 @@ class FirmwarePerformanceAnalyzer:
         return "\n".join(lines)
 
     def generate_html_report(self, timestamp):
-        author_line = f"<div class='author-info'>Author: Bang Thien Nguyen <ontario1998@gmail.com></div>"
+        author_line = f"<div class='author-info'>Author: Bang Thien Nguyen &lt;<a href='mailto:ontario1998@gmail.com'>ontario1998@gmail.com</a>&gt;</div>"
         build_line = f"<div class='author-info'>Build Number: {self.build_number} &nbsp;|&nbsp; Test Run Timestamp: {timestamp}</div>"
 
-        # Navigation bar with absolute URLs (robust under GitHub Pages project path)
         nav_bar = f"""
         <div class="nav-bar">
-          {LATEST_URL}Latest Report</a>
-          {HISTORY_URL}Report History</a>
+          <a class="nav-link" href="{LATEST_URL}">Latest Report</a>
+          <a class="nav-link nav-link-history" href="{HISTORY_URL}">Report History</a>
         </div>
         """
 
         scenario_html = ""
         for result in self.results:
             metric_html = ""
-            # Iterate over all possible metrics from the status report
             for metric, status in sorted(result["metric_status"].items()):
                 values = result["metrics"].get(metric)
                 status_label = render_status_label(status)
@@ -290,7 +282,6 @@ class FirmwarePerformanceAnalyzer:
             </div>
             """
 
-        # --- Test Suites Summary HTML ---
         suite_pass, suite_fail, suite_mixed, suite_skip = self._get_suite_summary_counts()
         total_suites = len(self.results)
         suite_pass_percent = (suite_pass / total_suites * 100) if total_suites > 0 else 0
@@ -305,7 +296,6 @@ class FirmwarePerformanceAnalyzer:
         </div>
         """
 
-        # --- Individual Tests Summary HTML ---
         metric_pass, metric_fail, metric_skip = self._get_metric_summary_counts()
         total_metrics = metric_pass + metric_fail + metric_skip
         metric_pass_percent = (metric_pass / total_metrics * 100) if total_metrics > 0 else 0
@@ -324,7 +314,7 @@ class FirmwarePerformanceAnalyzer:
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Compact Firmware Analysis Report</title>
+  <title>Firmware Analysis Report</title>
   <style>
   body {{
     font-family: 'Inter', system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
@@ -338,7 +328,6 @@ class FirmwarePerformanceAnalyzer:
     color: #1d4ed8; border-bottom: 3px solid #bfdbfe; padding-bottom: 10px; margin-bottom: 20px; font-size: 2em;
   }}
   .author-info {{ color: #4b5563; font-size: 0.9em; margin-bottom: 5px; }}
-  /* --- NAVIGATION STYLES --- */
   .nav-bar {{
     display: flex; justify-content: flex-start; margin-bottom: 20px; border-bottom: 1px solid #d1d5db; padding-bottom: 10px;
   }}
@@ -348,7 +337,6 @@ class FirmwarePerformanceAnalyzer:
   }}
   .nav-link:hover {{ background-color: #eff6ff; }}
   .nav-link-history {{ background-color: #dbeafe; }}
-  /* --- Layout --- */
   .report-grid {{ display: grid; grid-template-columns: 1fr; gap: 20px; margin-top: 15px; }}
   @media (min-width: 768px) {{ .report-grid {{ grid-template-columns: 1fr 1fr; }} }}
   .scenario-card {{ background-color: #f9fafb; border: 1px solid #e5e7eb; padding: 15px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }}

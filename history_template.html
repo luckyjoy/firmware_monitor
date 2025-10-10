@@ -1,25 +1,29 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>Report History</title>
-    <style>
-        body { font-family: sans-serif; padding: 20px; background-color: #f8f8f8; }
-        h1 { color: #1d4ed8; }
-        .back-link { 
-            display: inline-block; margin-bottom: 20px; padding: 10px 15px; background-color: #dbeafe; 
-            border-radius: 6px; text-decoration: none; color: #1d4ed8; font-weight: 600;
-        }
-        ul { list-style: none; padding: 0; }
-        li { margin-bottom: 10px; padding: 10px; border: 1px solid #ccc; border-radius: 4px; background-color: #fff; }
-        li a { text-decoration: none; color: #059669; font-weight: bold; }
-    </style>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Report History</title>
+  <style>
+    body { font-family: 'Inter', system-ui, -apple-system, Segoe UI, Roboto, sans-serif; background-color: #f0f4f8; color: #1a202c; margin: 2rem; }
+    .back-link { display:inline-block; margin-bottom: 20px; padding: 10px 15px; background-color: #dbeafe; border-radius: 6px; text-decoration: none; color: #1d4ed8; font-weight: 600; }
+    h1 { color: #1d4ed8; margin: 0 0 1rem 0; }
+    ul { list-style: none; padding: 0; margin: 0; }
+    li { margin-bottom: 10px; padding: 12px; border: 1px solid #e5e7eb; border-radius: 6px; background: #ffffff; box-shadow: 0 1px 2px rgba(0,0,0,0.04); }
+    li a { text-decoration: none; color: #059669; font-weight: 600; }
+    .note { margin-top: 1.5rem; color: #6b7280; font-size: .95rem; }
+  </style>
 </head>
 <body>
-    <a href="../index.html" class="back-link">← Back to Latest Report</a>
-    <h1>Archived Report History</h1>
-    <ul>
-        $HISTORY_LINKS
-    </ul>
-    <p>All reports are archived here: luckyjoy.github.io/firmware_monitor/report_history/</p>
+  <!-- Use absolute SITE_BASE_URL to avoid broken navigation on Pages project site -->
+  <a class="back-link" href="$SITE_BASE_URL">← Back to Latest Report</a>
+  <h1>Archived Report History</h1>
+  <ul>
+    $HISTORY_LINKS
+  </ul>
+  <p class="note">
+    All reports are archived here:
+    <a href="$SITE_BASE_URLreport_history/">$SITE_BASE_URLreport_history/</a>
+  </p>
 </body>
 </html>
