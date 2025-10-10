@@ -22,7 +22,7 @@ jobs:
       name: github-pages
       url: ${{ steps.deploy.outputs.page_url }}
     steps:
-      - name: Checkout main
+      - name: Checkout
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
@@ -32,102 +32,26 @@ jobs:
         with:
           python-version: '3.10'
 
-      - name: Generate report (Ubuntu)
+      - name: Generate report
         shell: bash
         run: |
           set -euo pipefail
           python firmware_monitor.py ${{ github.run_number }}
           LATEST="$(ls -t reports/*.html | head -n 1)"
           if [ -z "$LATEST" ]; then echo "::error::No report HTML found"; exit 1; fi
+          # Make the filename deterministic (Ubuntu suffix for now; we can add Windows later)
           mv "$LATEST" "reports/$(basename "$LATEST" .html)_ubuntu-latest.html"
 
-      - name: Prepare archive branch (report_history)
+      - name: Build site & history (script)
+        shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          rm -rf _hist
-          if git ls-remote --exit-code --heads "https://github.com/${GITHUB_REPOSITORY}.git" report_history >/dev/null 2>&1; then
-            git clone --depth 1 --branch report_history "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" _hist
-          else
-            git clone --depth 1 "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" _hist
-            cd _hist
-            git switch --orphan report_history
-            rm -rf ./*
-            echo "<!doctype html><title>Report History</title>" > index.html
-            git add -A
-            git -c user.name='github-actions[bot]' -c user.email='github-actions[bot]@users.noreply.github.com' commit -m "init report_history"
-            git push -u origin report_history
-            cd ..
-
-      - name: Build site (merge history + add new)
-        shell: bash
-        run: |
-          set -euo pipefail
-          mkdir -p _site/report_history
-          # 1) carry forward previous archive
-          rsync -a --exclude='.git' --exclude='.github' _hist/ _site/report_history/ || true
-          # 2) add this run's report
-          cp -f reports/*_ubuntu-latest.html _site/report_history/
-          # 3) site root points to the latest Ubuntu report
-          cp "$(ls -t _site/report_history/*_ubuntu-latest.html | head -n 1)" _site/index.html
-
-      - name: Generate history index (safe HTML + Back link)
-        shell: bash
-        run: |
-          set -euo pipefail
-          HIST="_site/report_history"
-          # Build newest-first link list
-          LINKS=""
-          for f in $(find "$HIST" -maxdepth 1 -type f -name 'firmware_analysis_report_*.html' | sort -r); do
-            b="$(basename "$f")"
-            lab="$(echo "$b" \
-              | sed -E 's/^firmware_analysis_report_([0-9]{8})_([0-9]{6})(_[0-9]+)?_(.*)\.html$/Date: \1 Time: \2 Build: \3 OS: \4/' \
-              | sed 's/_//g' | sed 's/Build:  /Build: NA /')"
-            LINKS="${LINKS}<li><a href=\"${b}\">${lab}</a></li>"
-          done
-          # SINGLE-QUOTED heredoc → Bash will NOT swallow '<a' as redirection
-          cat > "${HIST}/index.html" <<'HTML'
-<!doctype html>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Report History</title>
-<style>
-  body{font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;margin:2rem;color:#111827}
-  a{color:#1d4ed8;text-decoration:none}a:hover{text-decoration:underline}
-  .back{margin-bottom:1rem;display:inline-block}
-  h1{margin:.2rem 0 1rem}ul{padding-left:1.2rem}li{margin:.35rem 0}
-  .note{margin-top:1.5rem;color:#6b7280;font-size:.9rem}
-</style>
-/firmware_monitor/← Back to Latest Report</a>
-<h1>Archived Report History</h1>
-<ul>
-HTML
-          printf '%s\n' "${LINKS}" >> "${HIST}/index.html"
-          echo '</ul><div class="note">All reports are archived here: /firmware_monitor/report_history/</div>' >> "${HIST}/index.html"
-          touch _site/.nojekyll
+        run: bash scripts/publish_pages.sh
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v4
         with:
           path: _site/
-
-      - name: Update archive (report_history)
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          rsync -a --delete --exclude='.git' _site/report_history/ _hist/
-          cd _hist
-          git add -A
-          if ! git diff --cached --quiet; then
-            git -c user.name='github-actions[bot]' -c user.email='github-actions[bot]@users.noreply.github.com' commit -m "Add reports from run ${GITHUB_RUN_NUMBER}"
-            git push -u origin HEAD:report_history
-          else
-            echo "No archive changes."
-          fi
 
       - name: Deploy to GitHub Pages
         id: deploy
