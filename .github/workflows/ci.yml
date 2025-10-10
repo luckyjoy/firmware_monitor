@@ -32,9 +32,11 @@ jobs:
 
       - name: Generate report (${{ matrix.os }})
         shell: bash
+        env:
+          BUILD_NUM: ${{ github.run_number }} # <-- NEW: Pass run number as environment variable
         run: |
           set -euo pipefail
-          python firmware_monitor.py ${{ github.run_number }}
+          python firmware_monitor.py $BUILD_NUM # <-- Pass variable as argument
 
           # rename latest html with OS suffix
           LATEST="$(ls -t reports/*.html | head -n 1)"
@@ -82,7 +84,8 @@ jobs:
       - name: Merge reports and prepare site (Fully Resilient)
         shell: bash
         run: |
-          # 1) Attempt to run the script. It's expected to fail due to the bug, but we proceed.
+          # 1) Attempt to run the script. No build number argument is passed here, 
+          # which forces merge mode in firmware_monitor.py.
           python firmware_monitor.py || echo "Warning: firmware_monitor.py failed to generate summary reports. Proceeding."
           
           # We manually check files later, so we can re-enable set -euo pipefail

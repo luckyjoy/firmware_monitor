@@ -162,6 +162,7 @@ def render_status_label(status):
 # -------------------- REPORT GENERATION --------------------
 class FirmwarePerformanceAnalyzer:
     def __init__(self, build_number=None):
+        # build_number is now set via main() logic
         self.build_number = build_number if build_number else "NA"
         self.scenarios = MOCK_LOG_DATA
         self.results = []
@@ -184,6 +185,7 @@ class FirmwarePerformanceAnalyzer:
         base_filename = f"firmware_analysis_report_{timestamp}"
         
         # 1. Generate the uniquely named report (used in 'build_reports' job)
+        # Only include build number in unique name if it's not the default "NA"
         if self.build_number != "NA":
             base_filename += f"_{self.build_number}"
 
@@ -475,7 +477,13 @@ class FirmwarePerformanceAnalyzer:
 def main():
     build_number = None
     if len(sys.argv) > 1:
+        # 1. Try to get build number from command line argument (used in build_reports job)
         build_number = sys.argv[1]
+    
+    # 2. Fallback to environment variable if argument is missing (for CI robustness)
+    if not build_number and os.getenv('BUILD_NUM'):
+        build_number = os.getenv('BUILD_NUM')
+        
     analyzer = FirmwarePerformanceAnalyzer(build_number=build_number)
     analyzer.analyze()
     analyzer.generate_reports()
