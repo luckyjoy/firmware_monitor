@@ -34,8 +34,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          # Path is correct here because there is only one checkout
-          python firmware_monitor.py ${{ github.run_number }} 
+          python firmware_monitor.py ${{ github.run_number }}
 
           # rename latest html with OS suffix
           LATEST="$(ls -t reports/*.html | head -n 1)"
@@ -52,13 +51,13 @@ jobs:
     needs: build_reports
     runs-on: ubuntu-latest
     steps:
-      # ⬇️ FIX 1: Checkout main branch code into a dedicated sub-folder
+      # ⬇️ FIX 1: Checkout the main branch to the root
       - name: Checkout main branch
         uses: actions/checkout@v4
         with:
           ref: main 
-          path: _main # Sets the path to _main/firmware_monitor.py
           
+      # ⬇️ FIX 2: Checkout the archive branch into an isolated _hist folder
       - name: Checkout archive branch
         uses: actions/checkout@v4
         with:
@@ -82,8 +81,9 @@ jobs:
         run: |
           set -euo pipefail
           
-          # ⬇️ FIX 2: Run the script using the new path
-          python _main/firmware_monitor.py 
+          # 1) Re-run the script with all reports to generate a combined history report
+          # This should now work as the script is at the root and the reports folder is at ./reports
+          python firmware_monitor.py 
           
           # 2) Copy the final merged report and history index to the site root
           mkdir -p _site/report_history
