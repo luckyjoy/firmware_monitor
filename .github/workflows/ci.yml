@@ -36,7 +36,8 @@ jobs:
           BUILD_NUM: ${{ github.run_number }}
         run: |
           set -euo pipefail
-          python firmware_monitor.py ${{ github.run_number }} # Pass run number as argument for unique report
+          # The Python script is run with an argument to ensure it generates a unique report file
+          python firmware_monitor.py ${{ github.run_number }} 
 
           # rename latest html with OS suffix
           LATEST="$(ls -t reports/*.html | head -n 1)"
@@ -71,45 +72,51 @@ jobs:
           path: reports
           merge-multiple: true
 
-      - name: Merge reports and prepare site (Fully Resilient)
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Prepare History Directory and Merge Reports
         shell: bash
         env:
-          BUILD_NUM: ${{ github.run_number }} # Still needed for python script's header and final sed
-          
+          BUILD_NUM: ${{ github.run_number }}
         run: |
-          # --- NEW: Flatten the artifact directory structure for report history generation ---
+          set -euo pipefail
+          
+          # 1. Flatten the artifact directory structure
           echo "Flattening downloaded reports..."
+          # This command moves files from reports/*/ to reports/
           find reports/ -mindepth 2 -name '*.html' -exec mv {} reports/ \;
           find reports/ -mindepth 2 -name '*.txt' -exec mv {} reports/ \;
+          # This command removes the now-empty subdirectories
           find reports/ -mindepth 1 -type d -delete 2>/dev/null || echo "Info: No artifact subdirs to delete."
           
-          # 1) Attempt to run the script. No argument passed means merge mode is forced in Python.
-          set +e # Temporarily disable exit on error for the python script call
-          python firmware_monitor.py 
-          if [ $? -ne 0 ]; then
-             echo "Warning: firmware_monitor.py failed to generate summary reports. Proceeding with manual file checks."
-          fi
-          set -e # Re-enable exit on error
+          # 2. Copy history (from _hist branch) into the reports working directory
+          #    This is CRITICAL: It ensures firmware_monitor.py sees ALL history when generating report_history.html
+          echo "Merging existing history into current reports directory..."
+          rsync -a _hist/ reports/
           
-          # 2) Setup site directory
+          # 3. Generate summary reports (report.html and report_history.html)
+          #    The Python script is run with NO arguments to force merge mode.
+          python firmware_monitor.py 
+          
+          # 4. Setup _site directory
           mkdir -p _site/report_history
           
           LATEST_REPORT_HTML="reports/report.html"
           HISTORY_INDEX_HTML="reports/report_history.html"
 
-          # --- Main Index (Root /) Setup ---
+          # 5. Setup Main Index (Root /) - This assigns the latest run (e.g., Build 99) as the latest report
           if [ -f "$LATEST_REPORT_HTML" ]; then
             echo "Found merged report. Copying to _site/index.html"
             cp "$LATEST_REPORT_HTML" _site/index.html
             
-            # --- Post-Processing: Inject Build Number ---
-            # The python script generated the report header using BUILD_NUM env var, 
-            # but we use sed as a final safeguard to fix 'NA' if the logic failed.
+            # Post-Processing: Inject Build Number
             sed -i "s/Build Number: NA/Build Number: ${BUILD_NUM}/g" _site/index.html
             echo "SUCCESS: Injected Run Number ($BUILD_NUM) into _site/index.html."
           else
             echo "ERROR: Merged report ($LATEST_REPORT_HTML) missing. Using fallback Ubuntu report."
-            # Fallback logic remains the same
             FALLBACK_REPORT="$(ls -t reports/*_ubuntu-latest.html | head -n 1)"
             
             if [ -f "$FALLBACK_REPORT" ]; then
@@ -121,27 +128,27 @@ jobs:
             fi
           fi
           
-          # --- History (/report_history/) Setup ---
-          # This IF block will now correctly execute because the python script should have created report_history.html
+          # 6. Setup History (/report_history/)
           if [ -f "$HISTORY_INDEX_HTML" ]; then
             echo "Found history report. Building site navigation."
-            # 3) Copy all individual reports to the history folder
-            rsync -a --delete --exclude='report.html' --exclude='report_history.html' reports/ _site/report_history/
             
-            # 4) Get list of history links to inject into the history index page in _site
+            # CRITICAL FIX: Copy all reports (old and new) from 'reports' to _site/report_history/
+            # This directory now contains the full set of unique reports from all runs (97, 98, 99).
+            rsync -a --exclude='report.html' --exclude='report_history.html' reports/ _site/report_history/
+            
+            # Generate the index page using the newly generated report_history.html
             LINKS="$(sed -n '/<ul/,/<\/ul>/p' reports/report_history.html | sed '1d;$d')"
             
-            # 5) Generate a new, static history index page with correct relative links
+            # Generate a new, static history index page with correct relative links
             echo '<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><title>Archived Report History</title><link rel="stylesheet" href="../style.css"></head><body><a href="../index.html" class="back">← Back to Latest Report</a><h1>Archived Report History</h1><ul>' > _site/report_history/index.html
             echo "${LINKS}" >> _site/report_history/index.html
             echo '</ul><div class="note">All reports are archived here: <a href="https://luckyjoy.github.io/firmware_monitor/report_history/">https://luckyjoy.github.io/firmware_monitor/report_history/</a></div>' >> _site/report_history/index.html
           else
             echo "Warning: History report ($HISTORY_INDEX_HTML) missing. Creating placeholder history index page."
-            # This is the original error message the user saw, but is now a true failure mode.
             echo '<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><title>Archived Report History - Error</title><link rel="stylesheet" href="../style.css"></head><body><a href="../index.html" class="back">← Back to Latest Report</a><h1>Archived Report History</h1><p>Failed to generate history links. Please check the logs for firmware_monitor.py to resolve the underlying bug.</p></body></html>' > _site/report_history/index.html
           fi
           
-          # 6) ensure static hosting
+          # 7. ensure static hosting
           touch _site/.nojekyll
 
       # Publish the site artifact (contains full history + landing page)
@@ -154,10 +161,8 @@ jobs:
         run: |
           REPORT_URL="https://luckyjoy.github.io/firmware_monitor/"
           
-          # Print the URL to the console
           echo "The latest report is published here: ${REPORT_URL}"
           
-          # Add a clickable link to the GitHub Actions Job Summary
           echo "## ✅ Latest Report Published" >> $GITHUB_STEP_SUMMARY
           echo "- **[View Latest Report](${REPORT_URL})**" >> $GITHUB_STEP_SUMMARY
 
@@ -168,12 +173,18 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          rsync -a --delete --exclude='.git' _site/report_history/ _hist/
+          
+          # FIX: Remove '--delete' to preserve historical reports (e.g., build 97)
+          rsync -a --exclude='.git' _site/report_history/ _hist/
+          
           cd _hist
           git add -A
           if ! git diff --cached --quiet; then
             git -c user.name='github-actions[bot]' -c user.email='github-actions[bot]@users.noreply.github.com' commit -m "Add reports from run ${GITHUB_RUN_NUMBER}"
             git push origin report_history
+            echo "SUCCESS: Pushed updated report history archive."
+          else
+            echo "Info: No new report files to commit to report_history branch."
           fi
 
       # Final deployment step
