@@ -32,3 +32,4 @@ sleep 4
 rem start "" "https://github.com/luckyjoy/firmware_monitor/actions"
 echo.
 rem  start "" https://localhost:8443/view/all/builds
+del dummy.txt
