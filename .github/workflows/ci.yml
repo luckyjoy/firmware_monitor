@@ -35,18 +35,7 @@ jobs:
           
           # Create reports directory on the host runner
           mkdir -p reports
-          
-          # Use the base image directly, mounting the script and the reports folder.
-          # -v "$(pwd)/reports:/app/reports" ensures output is saved to the host.
-          # -w /app sets the working directory for firmware_monitor.py to run in.
-          docker run \
-            --rm \
-            #--platform=linux/amd64 \
-            -v "$(pwd)/firmware_monitor.py:/app/firmware_monitor.py" \
-            -v "$(pwd)/reports:/app/reports" \
-            -w /app \
-            python:3.10-slim \
-            /usr/local/bin/python firmware_monitor.py ${{ github.run_number }}
+          /usr/local/bin/python firmware_monitor.py ${{ github.run_number }}
           
           # Post-processing (renaming) remains on the host runner
           LATEST="$(ls -t reports/*.html | head -n 1)"
