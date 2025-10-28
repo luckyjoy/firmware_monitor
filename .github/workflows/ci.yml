@@ -41,7 +41,7 @@ jobs:
           # -w /app sets the working directory for firmware_monitor.py to run in.
           docker run \
             --rm \
-            --platform=linux/amd64 \
+            #--platform=linux/amd64 \
             -v "$(pwd)/firmware_monitor.py:/app/firmware_monitor.py" \
             -v "$(pwd)/reports:/app/reports" \
             -w /app \
