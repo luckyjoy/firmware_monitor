@@ -1,246 +1,157 @@
-💻 Firmware Monitor
-This repository, luckyjoy/firmware_monitor, houses a solution for monitoring, analyzing, or tracking changes within firmware images. This document provides instructions for setting up the project locally, utilizing Docker for consistent deployment, and configuring Continuous Integration/Continuous Deployment (CI/CD) using both GitHub Actions and Jenkins.
+# 💻 Firmware Performance Monitor & Report Generator
 
-🚀 Getting Started
-Prerequisites
-To run the project locally or build the Docker image, you will need:
+**A Self-Contained Python Framework for Firmware Performance Analysis and Scenario-Based Reporting.**
 
-Python 3.x (Required)
+This repository, **`firmware_monitor`**, provides a comprehensive, self-contained solution for monitoring, analyzing, and tracking performance changes within firmware images. It processes structured log data against defined thresholds and generates detailed, scenario-based analysis reports in both **TXT** and **HTML** formats.
 
-Docker (Required for containerization)
+-----
 
-Git
+-----
 
-Local Development
-Download/Clone the repository:
+## 🛠️ End-to-End CI/CD & Deployment Workflow
 
-The source code for this project can be downloaded directly from the GitHub repository page or cloned using Git.
+This project is designed for automation, using **GitHub Actions** and a **Jenkins Declarative Pipeline** to ensure consistent analysis and image publishing.
 
-Repository Link (Download Source): https://github.com/luckyjoy/firmware_monitor.git
+### 1\. Analysis & Report Generation
 
-git clone [https://github.com/luckyjoy/firmware_monitor.git](https://github.com/luckyjoy/firmware_monitor.git)
+  * The pipeline is triggered on a `push` or `pull_request` to the `main` branch.
+  * The core command, `python firmware_monitor.py`, executes the analysis, evaluates metrics against thresholds, and generates the `report.html` and `report_history.html` files in the `reports/` directory.
+
+### 2\. Packaging & Publishing
+
+  * The **`Dockerfile`** defines a consistent container environment.
+  * The Jenkins pipeline builds the Docker image and, on the `main` branch, tags and pushes it to a private registry.
+  * The GitHub Actions workflow similarly builds and pushes the image to **GitHub Container Registry (GHCR)**.
+
+### 3\. Deployment (Example)
+
+  * The Jenkins pipeline includes an optional `Deploy` stage where steps can be added to trigger a final deployment to a target environment (e.g., Kubernetes or an Ansible playbook).
+
+-----
+
+## 💡 Project Overview
+
+This framework processes structured log data to analyze the performance and stability of firmware under various scenarios (e.g., "Low Load Boot," "Thermal Stress," "Power Dip").
+
+| **Component** | **Technology** | **Role** |
+|---------------|----------------|----------|
+| Analysis Engine | **Python (firmware\_monitor.py)** | Evaluates metrics against pre-defined thresholds (e.g., 80% CPU, 5000μs Latency). |
+| Input Data | **MOCK\_LOG\_DATA (JSON/Dict)** | Structured data for CPU, Memory, Latency, Power, Temperature, and Boot Timestamps. |
+| Reporting | **HTML/TXT Generation** | Creates human-readable reports with scenario status labels (PASS, FAIL, MIXED, SKIP). |
+| Automation | **Jenkins / GitHub Actions** | Automates the entire analysis and containerization process. |
+
+### 📊 Monitored Metrics (Thresholds for Failure)
+
+The analysis tool tracks key system domains to ensure the firmware remains within acceptable performance limits:
+
+  * **CPU (%)**: Max **80.0%**.
+  * **Memory (KB)**: Max **900.0 KB**.
+  * **Latency (us)**: Max **5000.0 μs**.
+  * **Boot Timestamps (ms)**: Max **5000.0 ms**.
+  * **Power (mW)**: Max **100.0 mW**.
+  * **Temperature (°C)**: Max **85.0 °C**.
+
+-----
+
+## 🚀 Getting Started
+
+### 🔧 Prerequisites
+
+  - 🐍 **Python 3.x**
+  - 🐳 **Docker**
+  - ⚙️ **Git**
+
+### ⚙️ Installation
+
+Clone the repository and run the setup command:
+
+```bash
+git clone https://github.com/luckyjoy/firmware_monitor.git
 cd firmware_monitor
+# Install any required dependencies (if requirements.txt were present)
+# pip install -r requirements.txt 
+```
 
+### 🧪 Run the Analysis
 
+Execute the main script directly. This will generate the analysis reports in the local `reports/` directory.
 
-
-
-Run the monitor:
-
-Execute the main script directly. This generates the analysis reports in the reports/ directory.
-
+```bash
 python firmware_monitor.py
+```
 
+-----
 
+## 🐳 Dockerized Execution
 
+Use Docker to ensure the monitoring environment is consistent and reproducible.
 
+### 1\. Build the Docker Image
 
-📊 Monitored Features and Metrics
-The analysis tool processes structured log data to provide comprehensive reports across core system domains:
+Replace `v1.0.0` with your desired tag:
 
-Core Performance & Stability
-CPU Usage (%): Tracks average and peak processing load.
-
-Memory Footprint (kB): Monitors memory consumption to identify leaks or unexpected spikes.
-
-Task Latency (μs): Measures task execution delay, reporting average, peak, and P95 (95th percentile) latency.
-
-Boot Time (s): Calculates the total duration from system initialization to peripheral readiness.
-
-Thermal & Power Management
-Power Consumption (mW): Tracks power usage, including average and peak draw.
-
-Temperature (C): Monitors thermal data to identify overheating or thermal spikes.
-
-Operational Modes & Security
-Boost Cycle Time (s): Measures the total duration the firmware spends in the high-performance 'BOOST' mode.
-
-Security Events: Reports on critical incidents like failed authentication attempts and the current security state of the device.
-
-🐳 Docker Support
-Using Docker ensures that the monitoring environment is consistent across development, testing, and production, avoiding "works on my machine" issues.
-
-1. Build the Docker Image
-Build the container image and tag it locally. Replace v1.0.0 with your desired version tag.
-
+```bash
 docker build -t firmware-monitor:v1.0.0 .
+```
 
+### 2\. Run the Container and Map Output
 
+Run the container, mapping the internal `/app/reports` output directory to a local directory (`local_reports`) to retrieve the generated HTML and TXT files.
 
-
-
-2. Run the Container
-You can run the container locally, mapping necessary ports or volumes (e.g., if you need to access a local firmware file or database connection).
-
-Example Run (Basic):
-
-docker run --name fm_instance firmware-monitor:v1.0.0
-
-
-
-
-
-Example Run (With Volume Mapping for Output Reports):
-The script outputs reports to the /app/reports directory inside the container.
-
+```bash
 docker run -d \
     --name fm_production \
     -v $(pwd)/local_reports:/app/reports \
     firmware-monitor:v1.0.0
+```
 
+-----
 
+## 🌳 Framework Architecture
 
-
-
-3. Push to Registry (Optional)
-After testing, you can push the image to a container registry like Docker Hub or GitHub Container Registry (GHCR).
-
-# Tag for registry
-docker tag firmware-monitor:v1.0.0 luckyjoy/firmware-monitor:v1.0.0
-
-# Log in (if necessary)
-# docker login
-
-# Push the image
-docker push luckyjoy/firmware-monitor:v1.0.0
-
-
-
-
-
-⚙️ CI/CD Workflows
-1. GitHub Actions
-The GitHub Actions workflow automates testing and container image building directly within the GitHub environment on every push to the main branch or on every pull request.
-
-File Location: .github/workflows/ci.yml
-
-This workflow performs basic checks and builds the Docker image.
-
-name: CI Build and Test
-
-on:
-  push:
-    branches:
-      - main
-  pull_request:
-    branches:
-      - main
-
-jobs:
-  build_and_test:
-    runs-on: ubuntu-latest
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-
-    - name: Set up Python
-      uses: actions/setup-python@v5
-      with:
-        python-version: '3.10'
-
-    - name: Run Analysis Script
-      # Execute the self-contained script to verify functionality and generate reports
-      run: python firmware_monitor.py
-
-    - name: Log in to GitHub Container Registry (GHCR)
-      if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-      uses: docker/login-action@v3
-      with:
-        registry: ghcr.io
-        username: ${{ github.actor }}
-        password: ${{ secrets.GITHUB_TOKEN }}
-
-    - name: Build and push Docker image
-      if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-      uses: docker/build-push-action@v5
-      with:
-        context: .
-        push: true
-        tags: |
-          ghcr.io/${{ github.repository }}:latest
-          ghcr.io/${{ github.repository }}:${{ github.sha }}
-
-
-
-
-
-2. Jenkins Pipeline (Declarative)
-A Jenkins Declarative Pipeline is defined in a file named Jenkinsfile and allows Jenkins to automatically manage the CI/CD process.
-
-File Location: Jenkinsfile (in the root of the repository)
-
-This pipeline outlines the stages for testing and containerization.
-
-pipeline {
-    agent { docker { image 'python:3.10-slim' } }
-
-    environment {
-        DOCKER_IMAGE = "firmware-monitor:${BUILD_ID}"
-        REGISTRY_URL = "[your-private-registry.com/firmware-monitor](https://your-private-registry.com/firmware-monitor)"
-    }
-
-    stages {
-        stage('Checkout') {
-            steps {
-                # Automatically handled by Jenkins SCM polling/webhooks
-                echo 'Code checked out from SCM.'
-            }
-        }
-        stage('Run Analysis') {
-            steps {
-                sh 'python firmware_monitor.py'
-            }
-        }
-        stage('Build Docker Image') {
-            steps {
-                script {
-                    sh "docker build -t ${DOCKER_IMAGE} ."
-                }
-            }
-        }
-        stage('Publish Image') {
-            when { expression { return env.BRANCH_NAME == 'main' } }
-            steps {
-                withCredentials([usernamePassword(credentialsId: 'docker-registry-creds', passwordVariable: 'DOCKER_PASS', usernameVariable: 'DOCKER_USER')]) {
-                    sh "docker tag ${DOCKER_IMAGE} ${REGISTRY_URL}:latest"
-                    sh "docker login ${REGISTRY_URL} -u ${DOCKER_USER} -p ${DOCKER_PASS}"
-                    sh "docker push ${REGISTRY_URL}:latest"
-                }
-            }
-        }
-        stage('Deploy (Example)') {
-            when { expression { return env.BRANCH_NAME == 'main' } }
-            steps {
-                echo "Deployment step for ${REGISTRY_URL}:latest"
-                # Add steps here to trigger a Kubernetes deployment, Ansible playbook, etc.
-            }
-        }
-    }
-    post {
-        always {
-            echo 'Pipeline finished.'
-            sh 'docker rmi -f ${DOCKER_IMAGE}' // Cleanup
-        }
-        failure {
-            echo 'Pipeline failed. Check logs for details.'
-        }
-    }
-}
-
-
-
-
-
-📚 Repository Structure
-.
-├── .github/
+```
+firmware_monitor/
+├── .github/                            # GitHub Actions workflow definitions
 │   └── workflows/
-│       └── ci.yml      # GitHub Actions workflow
-├── config/
-├── Dockerfile          # Defines the container image
-├── Jenkinsfile         # Jenkins Declarative Pipeline
-└── firmware_monitor.py # Main analysis script (self-contained)
+│       └── ci.yml
+├── config/                             # Configuration files (Placeholder)
+├── Dockerfile                          # Defines the container image
+├── Jenkinsfile                         # Jenkins Declarative Pipeline
+├── README.md
+├── requirements.txt                    # (Inferred)
+├── firmware_monitor.py                 # Main analysis script (self-contained)
+└── reports/                            # Generated HTML and TXT reports
+    ├── report.html                     # Latest report
+    ├── report_history.html             # List of unique reports
+    └── firmware_analysis_report_*.html # Uniquely named reports
+```
 
+-----
 
+## 🤝 Contributing Guidelines
 
+1.  Fork the repository
+2.  Create a feature branch
+3.  Implement new scenarios, metrics, or reporting features
+4.  Run `python firmware_monitor.py` locally and verify results
+5.  Submit a Pull Request with a clear description
 
+**Code Style:**
+
+  - Follow **PEP8** conventions
+  - Ensure **HTML/TXT reports** generate without errors
+  - Document new logic and metrics within the code
+
+-----
+
+## 🪪 License
+
+Released under the **MIT License** — free to use, modify, and distribute.
+
+-----
+
+📬 *Contact:* Bang Thien Nguyen [ontario1998@gmail.com](mailto:ontario1998@gmail.com)
+
+-----
+
+> *“Measure performance before you optimize — know your hardware before you test your code.”*
